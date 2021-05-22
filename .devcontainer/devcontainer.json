@@ -12,7 +12,7 @@
 			"NODE_VERSION": "lts/*"
 		}
 	},
-	"runArgs": [ "--cap-add=SYS_PTRACE", "--security-opt", "seccomp=unconfined" ],
+	"runArgs": [ "--cap-add=SYS_PTRACE", "--security-opt", "seccomp=unconfined", "--name=go-upnp-playground" ],
 
 	// Set *default* container specific settings.json values on container create.
 	"settings": { 
@@ -24,19 +24,21 @@
 	
 	// Add the IDs of extensions you want installed when the container is created.
 	"extensions": [
-		"golang.Go"
+		"golang.Go",
+		"kelvin.vscode-sshfs",
+		"liximomo.sftp"
 	],
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
-	// "forwardPorts": [9000],
+	//"forwardPorts": [1900],
 
 	// Use 'portsAttributes' to set default properties for specific forwarded ports. More info: https://code.visualstudio.com/docs/remote/devcontainerjson-reference.
-	"portsAttributes": {
-		"9000": {
-			"label": "Hello Remote World",
-			"onAutoForward": "notify"
-		}
-	},
+	// "portsAttributes": {
+	// 	"9000": {
+	// 		"label": "Hello Remote World",
+	// 		"onAutoForward": "notify"
+	// 	}
+	// },
 
 	// Use 'otherPortsAttributes' to configure any ports that aren't configured using 'portsAttributes'.
 	// "otherPortsAttributes": {
@@ -45,6 +47,7 @@
 
 	// Use 'postCreateCommand' to run commands after the container is created.
 	// "postCreateCommand": "go version",
+	// "postStartCommand": "sed -i -e 's/options.emitClose = false;$/options.emitClose = false; options.autoDestroy = false;/g' /home/vscode/.vscode-server/extensions/liximomo.sftp-1.12.9/node_modules/ssh2-streams/lib/sftp.js",
 
 	// Uncomment to connect as a non-root user. More info: https://aka.ms/vscode-remote/containers/non-root.
 	"remoteUser": "vscode"

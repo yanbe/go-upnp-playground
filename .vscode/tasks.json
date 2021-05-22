@@ -1,0 +1,29 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "type": "ssh-shell",
+            "host": "go-upnp-playground",
+            "command": "docker build -t go-upnp-playground .",
+            "problemMatcher": [
+                "$go"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "run",
+            "type": "ssh-shell",
+            "host": "go-upnp-playground",
+            "command": "docker build -t go-upnp-playground . && docker run --rm -it --net=host --name go-upnp-playground go-upnp-playground",
+            "problemMatcher": [
+                "$go"
+            ],
+        },
+    ]
+}

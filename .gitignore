@@ -334,3 +334,6 @@ ASALocalRun/
 out
 pkg
 debug
+
+.vscode/settings.json
+.vscode/sftp.json
