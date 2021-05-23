@@ -20,7 +20,7 @@
             "label": "run",
             "type": "ssh-shell",
             "host": "go-upnp-playground",
-            "command": "docker build -t go-upnp-playground . && docker run --rm -it --net=host --name go-upnp-playground go-upnp-playground",
+            "command": "docker build -t go-upnp-playground . && docker run --rm -it --net=host --name go-upnp-playground --env HOST_IP=`ip -f inet -o addr show eth0|cut -d\\  -f 7 | cut -d/ -f 1` go-upnp-playground",
             "problemMatcher": [
                 "$go"
             ],
