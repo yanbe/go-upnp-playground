@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"go-upnp-playground/device"
+	"go-upnp-playground/desc"
 	"go-upnp-playground/ssdp"
+
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,33 +13,40 @@ import (
 )
 
 func main() {
-	uuid, _ := uuid.NewUUID()
+	deviceUUID := uuid.NewString()
 
-	descsrv := device.NewServer(uuid)
+	desc.DeviceUUID = deviceUUID
+	descsrv := desc.NewServer()
 	hostIP := os.Getenv("HOST_IP")
-	descsrv.Listen(hostIP)
+	if hostIP == "" {
+		os.Exit(1)
+	}
+	addr := descsrv.Listen(hostIP)
+
 	errDescSrv := make(chan error)
 	go func() {
 		errDescSrv <- descsrv.Serve()
 	}()
 
-	ssdpsrv := ssdp.NewServer(uuid, descsrv.Addr)
-	errSsdpSrv := make(chan error)
+	ssdpadv := ssdp.NewSSDPAdvertiser(deviceUUID, addr)
+	ssdpres := ssdp.NewSSDPDiscoveryResponder(deviceUUID, addr)
+
+	errSsdpRes := make(chan error)
 	go func() {
-		errSsdpSrv <- ssdpsrv.ListenAndServe()
+		errSsdpRes <- ssdpres.ListenAndServe()
 	}()
-	ssdpsrv.NotifyAlive()
+	ssdpadv.NotifyAlive()
 
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
-		ssdpsrv.NotifyByebye()
+		ssdpadv.NotifyByebye()
 		os.Exit(1)
 	}()
 
 	msgDescSrv := <-errDescSrv
 	fmt.Println(msgDescSrv)
-	msgSsdpSrv := <-errSsdpSrv
-	fmt.Println(msgSsdpSrv)
+	msgSsdpRes := <-errSsdpRes
+	fmt.Println(msgSsdpRes)
 }

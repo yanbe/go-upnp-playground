@@ -1,0 +1,40 @@
+<?xml version="1.0"?> 
+<root xmlns="urn:schemas-upnp-org:device-1-0"> 
+	<specVersion> 
+		<major>1</major> 
+		<minor>0</minor> 
+	</specVersion> 
+	<URLBase>http://{{ .addr }}/</URLBase>
+	<device> 
+		<deviceType>urn:schemas-upnp-org:device:MediaServer:1</deviceType>
+		<friendlyName>go-upnp-playground</friendlyName> 
+		<manufacturer>manufacturer name</manufacturer> 
+		<manufacturerURL>URL to manufacturer site</manufacturerURL> 
+		<modelDescription>long user-friendly title</modelDescription> 
+		<modelName>go-upnp-playground</modelName> 
+		<modelNumber>0.0.1</modelNumber> 
+		<modelURL>https://github.com/yanbe/go-upnp-playground</modelURL> 
+		<serialNumber>manufacturer's serial number</serialNumber> 
+		<UDN>uuid:{{ .uuid }}</UDN> 
+		<UPC>Universal Product Code</UPC> 
+		<iconList> 
+			<icon> 
+				<mimetype>image/png</mimetype> 
+				<width>120</width> 
+				<height>120</height> 
+				<depth>8</depth> 
+				<url>http://192.168.10.9:1737/dmrIcon_120.png</url> 
+			</icon> 
+		</iconList> 
+		<serviceList>
+			<service>
+				<serviceType>urn:schemas-upnp-org:service:ContentDirectory:1</serviceType>
+				<serviceId>urn:schemas-upnp-org:service:ContentDirectory</serviceId>				
+				<SCPDURL>/ContentDirectory/scpd.xml</SCPDURL>
+				<controlURL>/ContentDirectory/control.xml</controlURL>
+				<eventSubURL>/ContentDirectory/event.xml</eventSubURL>
+			</service>		
+		</serviceList> 
+		<presentationURL>http://{{ .addr }}/</presentationURL>
+	</device>
+</root>
