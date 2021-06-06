@@ -15,6 +15,7 @@ const (
 	ntsByebye    = `ssdp:byebye`
 	ntsUpdate    = `ssdp:update`
 	serverName   = "Linux/i686 UPnP/1.0 go-upnp-playground/0.0.1"
+	maxAge       = 1800
 )
 
 type SSDPAdvertiser struct {
@@ -44,7 +45,22 @@ func NewSSDPAdvertiser(uuid string, addr string) SSDPAdvertiser {
 	}
 }
 
-func (s *SSDPAdvertiser) NotifyAlive() {
+func (s *SSDPAdvertiser) ntAndUSN(target string) (string, string) {
+	var NT string
+	var USN string
+	switch target {
+	case "":
+		NT = fmt.Sprintf("uuid:%s", s.uuid)
+		USN = NT
+	default:
+		NT = target
+		USN = fmt.Sprintf("uuid:%s::%s", s.uuid, NT)
+	}
+	return NT, USN
+}
+
+func (s *SSDPAdvertiser) notifyTarget(target string) {
+	NT, USN := s.ntAndUSN(target)
 	req := http.Request{
 		Method: methodNotify,
 		// TODO: Support both IPv4 and IPv6.
@@ -53,12 +69,12 @@ func (s *SSDPAdvertiser) NotifyAlive() {
 		Header: http.Header{
 			// Putting headers in here avoids them being title-cased.
 			// (The UPnP discovery protocol uses case-sensitive headers)
-			"Cache-Control": []string{"max-age=1800"},
+			"Cache-Control": []string{fmt.Sprintf("max-age=%d", maxAge)},
 			"Location":      []string{fmt.Sprintf("http://%s/", s.addr)},
 			"Server":        []string{serverName},
-			"NT":            []string{upnpRootDevice},
+			"NT":            []string{NT},
 			"NTS":           []string{ntsAlive},
-			"USN":           {fmt.Sprintf("uuid:%s::%s", s.uuid, upnpRootDevice)},
+			"USN":           []string{USN},
 		},
 	}
 	udpRoundTripper := UDPRoundTripper{}
@@ -66,7 +82,18 @@ func (s *SSDPAdvertiser) NotifyAlive() {
 	client.Do(&req)
 }
 
-func (s *SSDPAdvertiser) NotifyByebye() {
+func (s *SSDPAdvertiser) NotifyAlive() {
+	for i := 0; i < 2; i++ {
+		s.notifyTarget("")
+		s.notifyTarget(upnpMediaServer)
+		s.notifyTarget(upnpContentDirectory)
+		s.notifyTarget(upnpConnectionManager)
+		s.notifyTarget(upnpRootDevice)
+	}
+}
+
+func (s *SSDPAdvertiser) notifyByebye(target string) {
+	NT, USN := s.ntAndUSN(target)
 	req := http.Request{
 		Method: methodNotify,
 		// TODO: Support both IPv4 and IPv6.
@@ -75,11 +102,31 @@ func (s *SSDPAdvertiser) NotifyByebye() {
 		Header: http.Header{
 			// Putting headers in here avoids them being title-cased.
 			// (The UPnP discovery protocol uses case-sensitive headers)
-			"NT":  []string{upnpRootDevice},
+			"NT":  []string{NT},
 			"NTS": []string{ntsByebye},
-			"USN": {fmt.Sprintf("uuid:%s::%s", s.uuid, upnpRootDevice)},
+			"USN": []string{USN},
 		},
 	}
 	client := http.Client{Transport: s}
 	client.Do(&req)
+}
+
+func (s *SSDPAdvertiser) NotifyByebye() {
+	for i := 0; i < 2; i++ {
+		s.notifyByebye("")
+		s.notifyByebye(upnpMediaServer)
+		s.notifyByebye(upnpContentDirectory)
+		s.notifyByebye(upnpConnectionManager)
+		s.notifyByebye(upnpRootDevice)
+	}
+}
+
+func (s *SSDPAdvertiser) Serve() error {
+	// Devices should wait a random interval less than 100 milliseconds before sending an initial set of advertisements in order to
+	// reduce the likelihood of network storms
+	waitRandomMillis(100)
+	for {
+		s.NotifyAlive()
+		waitRandomMillis((maxAge / 2) * 1000)
+	}
 }

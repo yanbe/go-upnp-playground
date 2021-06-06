@@ -4,22 +4,9 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "build",
-            "type": "ssh-shell",
-            "host": "go-upnp-playground",
-            "command": "docker build -t go-upnp-playground .",
-            "problemMatcher": [
-                "$go"
-            ],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            }
-        },
-        {
             "label": "run",
             "type": "ssh-shell",
-            "host": "go-upnp-playground",
+            "host": "proliant",
             "command": "docker build -t go-upnp-playground . && docker run --rm -it --net=host --name go-upnp-playground --env HOST_IP=`ip -f inet -o addr show eth0|cut -d\\  -f 7 | cut -d/ -f 1` go-upnp-playground",
             "problemMatcher": [
                 "$go"

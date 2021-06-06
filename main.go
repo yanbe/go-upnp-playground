@@ -32,10 +32,14 @@ func main() {
 	ssdpres := ssdp.NewSSDPDiscoveryResponder(deviceUUID, addr)
 
 	errSsdpRes := make(chan error)
+	errSsdpAdvRes := make(chan error)
+
 	go func() {
 		errSsdpRes <- ssdpres.ListenAndServe()
 	}()
-	ssdpadv.NotifyAlive()
+	go func() {
+		errSsdpAdvRes <- ssdpadv.Serve()
+	}()
 
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
@@ -49,4 +53,7 @@ func main() {
 	fmt.Println(msgDescSrv)
 	msgSsdpRes := <-errSsdpRes
 	fmt.Println(msgSsdpRes)
+	msgSsdpAdvRes := <-errSsdpAdvRes
+	fmt.Println(msgSsdpAdvRes)
+
 }
