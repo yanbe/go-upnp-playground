@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"go-upnp-playground/desc"
+	"go-upnp-playground/service"
 	"go-upnp-playground/ssdp"
+	"log"
 
 	"os"
 	"os/signal"
@@ -14,18 +15,19 @@ import (
 
 func main() {
 	deviceUUID := uuid.NewString()
+	log.Print("deviceUUID: ", deviceUUID)
 
-	desc.DeviceUUID = deviceUUID
-	descsrv := desc.NewServer()
+	service.DeviceUUID = deviceUUID
+	server := service.NewServer()
 	hostIP := os.Getenv("HOST_IP")
 	if hostIP == "" {
-		os.Exit(1)
+		log.Fatal("HOST_IP environemnt variable not passed")
 	}
-	addr := descsrv.Listen(hostIP)
+	addr := server.Listen(hostIP)
 
-	errDescSrv := make(chan error)
+	errSrv := make(chan error)
 	go func() {
-		errDescSrv <- descsrv.Serve()
+		errSrv <- server.Serve()
 	}()
 
 	ssdpadv := ssdp.NewSSDPAdvertiser(deviceUUID, addr)
@@ -49,11 +51,10 @@ func main() {
 		os.Exit(1)
 	}()
 
-	msgDescSrv := <-errDescSrv
-	fmt.Println(msgDescSrv)
+	msgSrv := <-errSrv
+	fmt.Println(msgSrv)
 	msgSsdpRes := <-errSsdpRes
 	fmt.Println(msgSsdpRes)
 	msgSsdpAdvRes := <-errSsdpAdvRes
 	fmt.Println(msgSsdpAdvRes)
-
 }

@@ -2,6 +2,7 @@ package ssdp
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -28,9 +29,7 @@ func NewSSDPDiscoveryResponder(uuid string, addr string) SSDPDiscoveryResponder 
 	}
 }
 
-func (s *SSDPDiscoveryResponder) stAndUSN(target string) (string, string) {
-	var ST string
-	var USN string
+func (s *SSDPDiscoveryResponder) stAndUSN(target string) (ST string, USN string, err error) {
 	deviceTarget := fmt.Sprintf("uuid:%s", s.uuid)
 	switch target {
 	case deviceTarget:
@@ -43,8 +42,10 @@ func (s *SSDPDiscoveryResponder) stAndUSN(target string) (string, string) {
 	case upnpConnectionManager:
 		ST = target
 		USN = fmt.Sprintf("%s::%s", deviceTarget, ST)
+	default:
+		err = errors.New(fmt.Sprint("unsupported search target: ", target))
 	}
-	return ST, USN
+	return
 }
 
 func waitRandomMillis(mx int64) {
@@ -54,19 +55,20 @@ func waitRandomMillis(mx int64) {
 	time.Sleep(time.Duration(randSleepMilliSeconds) * time.Millisecond)
 }
 
-func (srv *SSDPDiscoveryResponder) ServeMessage(rw http.ResponseWriter, req *http.Request) {
-	if req.Method != "M-SEARCH" {
+func (srv *SSDPDiscoveryResponder) ServeMessage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "M-SEARCH" {
 		return
 	}
-	ST, USN := srv.stAndUSN(req.Header.Get("ST"))
-	if ST == "" {
+	ST, USN, err := srv.stAndUSN(r.Header.Get("ST"))
+	if err != nil {
+		log.Print(err)
 		return
 	}
-	log.Printf("[ssdp] Got %s %s message from %v: %v", req.Method, req.URL.Path, req.RemoteAddr, req.Header)
-	mxHeader := req.Header.Get("MX")
+	mxHeader := r.Header.Get("MX")
 	mx, err := strconv.ParseInt(mxHeader, 10, 8)
 	if err != nil {
-		log.Fatalf("invalid MX header: cannot parse as int %s", mxHeader)
+		log.Print("invalid MX header: ", err)
+		return
 	}
 	if mx > 120 {
 		mx = 120
@@ -88,8 +90,7 @@ func (srv *SSDPDiscoveryResponder) ServeMessage(rw http.ResponseWriter, req *htt
 			"Date":          {fmt.Sprintf("%v", time.Now().Format(time.RFC1123))},
 		},
 	}
-	log.Printf("[device] Respond %v", res)
-	wb := bufio.NewWriter(rw)
+	wb := bufio.NewWriter(w)
 	res.Write(wb)
 	wb.Flush()
 }

@@ -1,8 +1,5 @@
 FROM golang:stretch
 
-ENV GOPATH=/go
 WORKDIR /app
-COPY . .
-RUN go get
-RUN go build
-ENTRYPOINT [ "./go-upnp-playground" ]
+RUN go get github.com/google/uuid@v1.2.0
+RUN go get github.com/deepmap/oapi-codegen/pkg/runtime
