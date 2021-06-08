@@ -79,8 +79,7 @@ func (s *SSDPAdvertiser) notifyTarget(target string) {
 			"USN":           {USN},
 		},
 	}
-	udpRoundTripper := UDPRoundTripper{}
-	client := http.Client{Transport: &udpRoundTripper}
+	client := http.Client{Transport: &UDPRoundTripper{}}
 	client.Do(&req)
 }
 

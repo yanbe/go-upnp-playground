@@ -1,8 +1,8 @@
 package soap
 
 import (
-	"bytes"
 	"context"
+	"go-upnp-playground/bufferpool"
 	"go-upnp-playground/epgstation"
 	"html/template"
 	"log"
@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -57,22 +56,6 @@ type Action struct {
 }
 
 var jst = time.FixedZone("Asia/Tokyo", 9*60*60)
-var bytesBufferPool sync.Pool
-
-func newBytesBuffer() *bytes.Buffer {
-	if v := bytesBufferPool.Get(); v != nil {
-		bb := v.(*bytes.Buffer)
-		bb.Reset()
-		return bb
-	}
-	// Note: if this reader size is ever changed, update
-	// TestHandlerBodyClose's assumptions.
-	return &bytes.Buffer{}
-}
-
-func putBytesBuffer(bb *bytes.Buffer) {
-	bytesBufferPool.Put(bb)
-}
 
 var funcMap = template.FuncMap{
 	"date": func(t epgstation.UnixtimeMS) string { return time.Unix(int64(t)/1000, 0).In(jst).Format("2006-01-02") },
@@ -89,9 +72,8 @@ var funcMap = template.FuncMap{
 }
 
 func (a *Action) Browse(ObjectID string, BrowseFlag string, Filter string, StartingIndex int, RequestedCount int, SortCriteria string) (string, int, int, int) {
-	// TODO: assuming EPGStation process is running on port 8888 on same host, but some may want to communicate with another host
-	buf := newBytesBuffer()
-	defer putBytesBuffer(buf)
+	buf := bufferpool.NewBytesBuffer()
+	defer bufferpool.PutBytesBuffer(buf)
 	switch BrowseFlag {
 	case "BrowseMetadata":
 		var recordedItem *epgstation.RecordedItem

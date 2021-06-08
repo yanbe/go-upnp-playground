@@ -4,27 +4,18 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"go-upnp-playground/bufferpool"
 	"io"
 	"log"
 	"net"
 	"net/http"
 	"strconv"
-	"sync"
 
 	"github.com/google/uuid"
 )
 
-const (
-	DefaultMaxMessageBytes = 2 << 10
-)
-
 var (
 	crlf = []byte("\r\n")
-
-	bufBytesPool      sync.Pool
-	bufioReaderPool   sync.Pool
-	bufioWriter2kPool sync.Pool
-	bufioWriter4kPool sync.Pool
 )
 
 // Handler is the interface by which received HTTPU messages are passed to
@@ -37,12 +28,11 @@ type Handler interface {
 
 // A Server defines parameters for running an HTTPU server.
 type SSDPDiscoveryResponder struct {
-	serviceAddr     net.TCPAddr    // TCP address to listen on
-	Multicast       bool           // Should listen for multicast?
-	Interface       *net.Interface // Network interface to listen on for multicast, nil for default multicast interface
-	Handler         Handler        // handler to invoke
-	MaxMessageBytes int            // maximum number of bytes to read from a packet, DefaultMaxMessageBytes if 0
-	deviceUUID      uuid.UUID
+	serviceAddr net.TCPAddr    // TCP address to listen on
+	Multicast   bool           // Should listen for multicast?
+	Interface   *net.Interface // Network interface to listen on for multicast, nil for default multicast interface
+	Handler     Handler        // handler to invoke
+	deviceUUID  uuid.UUID
 }
 
 // ListenAndServe listens on the UDP network address srv.Addr. If srv.Multicast
@@ -70,70 +60,6 @@ func (s *SSDPDiscoveryResponder) ListenAndServe() error {
 	return s.Serve(conn)
 }
 
-func (s *SSDPDiscoveryResponder) newBytesBuf() []byte {
-	if v := bufBytesPool.Get(); v != nil {
-		buf := v.(*[]byte)
-		return *buf
-	}
-	var maxMessageBytes int
-	switch s.MaxMessageBytes {
-	case 0:
-		maxMessageBytes = DefaultMaxMessageBytes
-	default:
-		maxMessageBytes = s.MaxMessageBytes
-	}
-	return make([]byte, maxMessageBytes)
-}
-
-func putBytesBuf(buf []byte) {
-	bufBytesPool.Put(&buf)
-}
-
-func newBufioReader(r io.Reader) *bufio.Reader {
-	if v := bufioReaderPool.Get(); v != nil {
-		br := v.(*bufio.Reader)
-		br.Reset(r)
-		return br
-	}
-	// Note: if this reader size is ever changed, update
-	// TestHandlerBodyClose's assumptions.
-	return bufio.NewReader(r)
-}
-
-func putBufioReader(br *bufio.Reader) {
-	br.Reset(nil)
-	bufioReaderPool.Put(br)
-}
-
-func bufioWriterPool(size int) *sync.Pool {
-	switch size {
-	case 2 << 10:
-		return &bufioWriter2kPool
-	case 4 << 10:
-		return &bufioWriter4kPool
-	}
-	return nil
-}
-
-func newBufioWriterSize(w io.Writer, size int) *bufio.Writer {
-	pool := bufioWriterPool(size)
-	if pool != nil {
-		if v := pool.Get(); v != nil {
-			bw := v.(*bufio.Writer)
-			bw.Reset(w)
-			return bw
-		}
-	}
-	return bufio.NewWriterSize(w, size)
-}
-
-func putBufioWriter(bw *bufio.Writer) {
-	bw.Reset(nil)
-	if pool := bufioWriterPool(bw.Available()); pool != nil {
-		pool.Put(bw)
-	}
-}
-
 type UDPResponseWriter struct {
 	conn         net.PacketConn
 	addr         net.Addr
@@ -152,7 +78,6 @@ type response struct {
 }
 
 func (r *response) Write(data []byte) (int, error) {
-	log.Print(string(data))
 	return r.rw.conn.WriteTo(data, r.rw.addr)
 }
 
@@ -211,7 +136,7 @@ func (w *UDPResponseWriter) WriteHeader(code int) {
 }
 
 func (w *UDPResponseWriter) finishRequest() {
-	defer putBufioWriter(w.bufw)
+	defer bufferpool.PutBufioWriter(w.bufw)
 	if !w.wroteHeader {
 		if !w.calledHeader {
 			return // unsupported or invalid request
@@ -224,7 +149,7 @@ func (w *UDPResponseWriter) finishRequest() {
 // Serve messages received on the given packet listener to the srv.Handler.
 func (s *SSDPDiscoveryResponder) Serve(l net.PacketConn) error {
 	for {
-		buf := s.newBytesBuf()
+		buf := bufferpool.NewBytesBuf()
 		n, addr, err := l.ReadFrom(buf)
 		if err != nil {
 			return err
@@ -232,10 +157,10 @@ func (s *SSDPDiscoveryResponder) Serve(l net.PacketConn) error {
 
 		go func(buf []byte, n int, addr net.Addr) {
 			r := io.LimitReader(bytes.NewReader(buf), int64(n))
-			br := newBufioReader(r)
+			br := bufferpool.NewBufioReader(r)
 			req, err := http.ReadRequest(br)
-			putBytesBuf(buf)
-			putBufioReader(br)
+			bufferpool.PutBytesBuf(buf)
+			bufferpool.PutBufioReader(br)
 			if err != nil {
 				log.Printf("httpu: Failed to parse request: %v", err)
 				return
@@ -249,7 +174,7 @@ func (s *SSDPDiscoveryResponder) Serve(l net.PacketConn) error {
 			rw.res = &response{
 				rw,
 			}
-			rw.bufw = newBufioWriterSize(rw.res, 2<<10)
+			rw.bufw = bufferpool.NewBufioWriterSize(rw.res, 2<<10)
 			s.ServeMessage(rw, req)
 			rw.finishRequest()
 		}(buf, n, addr)
@@ -264,8 +189,9 @@ func (t *UDPRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	var buf bytes.Buffer
-	req.Write(&buf)
+	buf := bufferpool.NewBytesBuffer()
+	defer bufferpool.PutBytesBuffer(buf)
+	req.Write(buf)
 	destAddr, err := net.ResolveUDPAddr("udp", req.Host)
 	if err != nil {
 		return nil, err

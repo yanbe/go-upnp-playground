@@ -1,7 +1,6 @@
 package service
 
 import (
-	"bytes"
 	"encoding/xml"
 	"io"
 	"log"
@@ -11,6 +10,7 @@ import (
 	"strconv"
 	"text/template"
 
+	"go-upnp-playground/bufferpool"
 	"go-upnp-playground/soap"
 
 	"github.com/google/uuid"
@@ -31,8 +31,9 @@ func serveXMLDocHandler(tmplFile string, vars map[string]interface{}) http.Handl
 			w.Header().Set("Content-Length", strconv.Itoa(int(fi.Size())))
 			io.Copy(w, r)
 		} else {
-			var buf = bytes.Buffer{}
-			template.Must(template.ParseFiles(tmplFile)).Execute(&buf, vars)
+			buf := bufferpool.NewBytesBuffer()
+			defer bufferpool.PutBytesBuffer(buf)
+			template.Must(template.ParseFiles(tmplFile)).Execute(buf, vars)
 			w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
 			w.Write(buf.Bytes())
 		}
@@ -43,7 +44,8 @@ func serviceContentDirectoryControlHandler(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", `text/xml; charset="utf-8"`)
 	w.Header().Set("Ext", "")
 	w.Header().Set("Server", "Linux/i686 UPnP/1.0 go-upnp-playground/0.0.1")
-	var buf = bytes.Buffer{}
+	buf := bufferpool.NewBytesBuffer()
+	defer bufferpool.PutBytesBuffer(buf)
 	buf.WriteString(xml.Header)
 	buf.Write(soap.HandleAction(r))
 	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
