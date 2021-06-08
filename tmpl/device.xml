@@ -4,7 +4,7 @@
 		<major>1</major> 
 		<minor>0</minor> 
 	</specVersion> 
-	<URLBase>http://{{ .addr }}/</URLBase>
+	<URLBase>http://{{.addr.IP}}:{{.addr.Port}}/</URLBase>
 	<device> 
 		<deviceType>urn:schemas-upnp-org:device:MediaServer:1</deviceType>
 		<INMPR03>1.0</INMPR03>
@@ -14,7 +14,7 @@
 		<modelDescription>long user-friendly title</modelDescription> 
 		<modelName>go-upnp-playground</modelName> 
 		<modelNumber>0.0.1</modelNumber> 
-		<UDN>uuid:{{ .uuid }}</UDN> 
+		<UDN>uuid:{{.uuid}}</UDN> 
 		<serviceList>
 			<service>
 				<serviceType>urn:schemas-upnp-org:service:ConnectionManager:1</serviceType>

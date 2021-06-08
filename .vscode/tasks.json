@@ -7,7 +7,7 @@
             "label": "run",
             "type": "ssh-shell",
             "host": "go-upnp-playground",
-            "command": "docker build -t go-upnp-playground . && docker run --rm -it --net=host -v $PWD:/app --env HOST_IP=`ip -f inet -o addr show eth0|cut -d\\  -f 7 | cut -d/ -f 1` --name go-upnp-playground go-upnp-playground go run go-upnp-playground",
+            "command": "docker build -t go-upnp-playground . && docker run --rm -it -v $PWD:/app --name go-upnp-playground go-upnp-playground go build . && ./go-upnp-playground",
             "problemMatcher": [
                 "$go"
             ]

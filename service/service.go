@@ -12,10 +12,9 @@ import (
 	"text/template"
 
 	"go-upnp-playground/soap"
-)
 
-var DeviceUUID string
-var addr string
+	"github.com/google/uuid"
+)
 
 func serveXMLDocHandler(tmplFile string, vars map[string]interface{}) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -53,29 +52,42 @@ func serviceContentDirectoryControlHandler(w http.ResponseWriter, r *http.Reques
 
 // A Server defines parameters for running an HTTPU server.
 type Server struct {
-	listener net.Listener
+	deviceUUID uuid.UUID
+	listener   *net.TCPListener
+	addr       net.TCPAddr
 }
 
-func (srv *Server) Listen(hostIP string) string {
-	srv.listener, _ = net.Listen("tcp", hostIP+":0") // start listen arbitorary port
-	addr = srv.listener.Addr().(*net.TCPAddr).String()
-	log.Println("Listening", addr)
-	return addr
+func (s *Server) Addr() net.TCPAddr {
+	return s.addr
 }
 
-func (srv *Server) Serve() error {
+func (s *Server) Listen(hostIP net.IP) {
+	laddr := net.TCPAddr{}
+	laddr.IP = hostIP
+	laddr.Port = 0
+	s.listener, _ = net.ListenTCP("tcp", &laddr) // start listen arbitorary port
+	s.addr = *s.listener.Addr().(*net.TCPAddr)
+
+	soap.EPGStationAddr.IP = s.addr.IP
+	soap.EPGStationAddr.Port = 8888
+}
+
+func (s *Server) Serve() error {
 	http.HandleFunc("/", serveXMLDocHandler("tmpl/device.xml", map[string]interface{}{
-		"uuid": DeviceUUID,
-		"addr": addr,
+		"uuid": s.deviceUUID,
+		"addr": s.addr,
 	}))
 	http.HandleFunc("/ContentDirectory/scpd.xml", serveXMLDocHandler("tmpl/ContentDirectory1.xml", nil))
 	http.HandleFunc("/ContentDirectory/control.xml", serviceContentDirectoryControlHandler)
 	http.HandleFunc("/ConnectionManager/scpd.xml", serveXMLDocHandler("tmpl/ConnectionManager1.xml", nil))
 	http.HandleFunc("/ConnectionManager/control.xml", serviceContentDirectoryControlHandler)
 
-	return http.Serve(srv.listener, nil)
+	return http.Serve(s.listener, nil)
 }
 
-func NewServer() Server {
-	return Server{}
+func NewServer(deviceUUID uuid.UUID) *Server {
+	return &Server{
+		deviceUUID: deviceUUID,
+		listener:   nil,
+	}
 }

@@ -6,6 +6,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -19,8 +21,8 @@ const (
 )
 
 type SSDPAdvertiser struct {
-	uuid string
-	addr string
+	deviceUUID  uuid.UUID
+	serviceAddr net.TCPAddr
 }
 
 func (s *SSDPAdvertiser) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -38,10 +40,10 @@ func (s *SSDPAdvertiser) RoundTrip(req *http.Request) (*http.Response, error) {
 	return &http.Response{}, nil
 }
 
-func NewSSDPAdvertiser(uuid string, addr string) SSDPAdvertiser {
+func NewSSDPAdvertiser(deviceUUID uuid.UUID, serviceAddr net.TCPAddr) SSDPAdvertiser {
 	return SSDPAdvertiser{
-		uuid: uuid,
-		addr: addr,
+		deviceUUID:  deviceUUID,
+		serviceAddr: serviceAddr,
 	}
 }
 
@@ -50,11 +52,11 @@ func (s *SSDPAdvertiser) ntAndUSN(target string) (string, string) {
 	var USN string
 	switch target {
 	case "":
-		NT = fmt.Sprintf("uuid:%s", s.uuid)
+		NT = fmt.Sprintf("uuid:%s", s.deviceUUID)
 		USN = NT
 	default:
 		NT = target
-		USN = fmt.Sprintf("uuid:%s::%s", s.uuid, NT)
+		USN = fmt.Sprintf("uuid:%s::%s", s.deviceUUID, NT)
 	}
 	return NT, USN
 }
@@ -69,12 +71,12 @@ func (s *SSDPAdvertiser) notifyTarget(target string) {
 		Header: http.Header{
 			// Putting headers in here avoids them being title-cased.
 			// (The UPnP discovery protocol uses case-sensitive headers)
-			"Cache-Control": []string{fmt.Sprintf("max-age=%d", maxAge)},
-			"Location":      []string{fmt.Sprintf("http://%s/", s.addr)},
-			"Server":        []string{serverName},
-			"NT":            []string{NT},
-			"NTS":           []string{ntsAlive},
-			"USN":           []string{USN},
+			"Cache-Control": {fmt.Sprintf("max-age=%d", maxAge)},
+			"Location":      {fmt.Sprintf("http://%s:%d/", s.serviceAddr.IP, s.serviceAddr.Port)},
+			"Server":        {serverName},
+			"NT":            {NT},
+			"NTS":           {ntsAlive},
+			"USN":           {USN},
 		},
 	}
 	udpRoundTripper := UDPRoundTripper{}

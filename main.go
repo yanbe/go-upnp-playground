@@ -1,10 +1,12 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"go-upnp-playground/service"
 	"go-upnp-playground/ssdp"
 	"log"
+	"net"
 
 	"os"
 	"os/signal"
@@ -13,25 +15,37 @@ import (
 	"github.com/google/uuid"
 )
 
-func main() {
-	deviceUUID := uuid.NewString()
-	log.Print("deviceUUID: ", deviceUUID)
-
-	service.DeviceUUID = deviceUUID
-	server := service.NewServer()
-	hostIP := os.Getenv("HOST_IP")
-	if hostIP == "" {
-		log.Fatal("HOST_IP environemnt variable not passed")
+func localIP() (net.IP, error) {
+	ifAddrs, err := net.InterfaceAddrs()
+	if err != nil {
+		log.Fatal(err)
 	}
-	addr := server.Listen(hostIP)
+	for _, ifAddr := range ifAddrs {
+		netIP, ok := ifAddr.(*net.IPNet)
+		if ok && !netIP.IP.IsLoopback() && netIP.IP.To4() != nil {
+			return netIP.IP, nil
+		}
+	}
+	return nil, errors.New("could not get local IP addres")
+}
+
+func main() {
+	deviceUUID := uuid.New()
+	server := service.NewServer(deviceUUID)
+	localIP, err := localIP()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Print("Listening: ", localIP)
+	server.Listen(localIP)
 
 	errSrv := make(chan error)
 	go func() {
 		errSrv <- server.Serve()
 	}()
 
-	ssdpadv := ssdp.NewSSDPAdvertiser(deviceUUID, addr)
-	ssdpres := ssdp.NewSSDPDiscoveryResponder(deviceUUID, addr)
+	ssdpadv := ssdp.NewSSDPAdvertiser(deviceUUID, server.Addr())
+	ssdpres := ssdp.NewSSDPDiscoveryResponder(deviceUUID, server.Addr())
 
 	errSsdpRes := make(chan error)
 	errSsdpAdvRes := make(chan error)

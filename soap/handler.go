@@ -3,7 +3,7 @@ package soap
 import (
 	"encoding/xml"
 	"io/ioutil"
-	"log"
+	"net"
 	"net/http"
 	"reflect"
 	"regexp"
@@ -11,9 +11,10 @@ import (
 
 const actionNameRegexp = `"urn:schemas-upnp-org:service:ContentDirectory:1#(.+)"`
 
+var EPGStationAddr net.TCPAddr
+
 func HandleAction(r *http.Request) []byte {
 	actionName := regexp.MustCompile(actionNameRegexp).FindStringSubmatch(r.Header.Get("SoapAction"))[1]
-	log.Printf("Request: %v", r)
 
 	data, _ := ioutil.ReadAll(r.Body)
 	var soapReq Request
@@ -23,7 +24,7 @@ func HandleAction(r *http.Request) []byte {
 	for i := range argv {
 		argv[i] = reqStruct.Field(i + 1) // skip XMLName field
 	}
-	result := reflect.ValueOf(Action{}).MethodByName(actionName).Call(argv)
+	result := reflect.ValueOf(&Action{target: EPGStationAddr}).MethodByName(actionName).Call(argv)
 
 	var soapRes Response
 	soapRes.EncodingStyle = "http://schemas.xmlsoap.org/soap/encoding/"

@@ -1,14 +1,15 @@
 package ssdp
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
-	"log"
 	"math/rand"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -18,19 +19,18 @@ const (
 	upnpContentDirectory  = "urn:schemas-upnp-org:service:ContentDirectory:1"
 	upnpConnectionManager = "urn:schemas-upnp-org:service:ConnectionManager:1"
 	vendor                = "Linux/i686 UPnP/1.0 go-upnp-playground/0.0.1"
-	maxWaitSeconds        = 1
 )
 
-func NewSSDPDiscoveryResponder(uuid string, addr string) SSDPDiscoveryResponder {
+func NewSSDPDiscoveryResponder(deviceUUID uuid.UUID, serviceAddr net.TCPAddr) SSDPDiscoveryResponder {
 	return SSDPDiscoveryResponder{
-		Multicast: true,
-		uuid:      uuid,
-		addr:      addr,
+		Multicast:   true,
+		deviceUUID:  deviceUUID,
+		serviceAddr: serviceAddr,
 	}
 }
 
 func (s *SSDPDiscoveryResponder) stAndUSN(target string) (ST string, USN string, err error) {
-	deviceTarget := fmt.Sprintf("uuid:%s", s.uuid)
+	deviceTarget := fmt.Sprintf("uuid:%s", s.deviceUUID)
 	switch target {
 	case deviceTarget:
 		ST = deviceTarget
@@ -51,7 +51,6 @@ func (s *SSDPDiscoveryResponder) stAndUSN(target string) (ST string, USN string,
 func waitRandomMillis(mx int64) {
 	rand.Seed(time.Now().UnixNano())
 	randSleepMilliSeconds := rand.Intn(int(mx))
-	log.Printf("mx: %d, random wait: %d", mx, randSleepMilliSeconds)
 	time.Sleep(time.Duration(randSleepMilliSeconds) * time.Millisecond)
 }
 
@@ -61,36 +60,22 @@ func (srv *SSDPDiscoveryResponder) ServeMessage(w http.ResponseWriter, r *http.R
 	}
 	ST, USN, err := srv.stAndUSN(r.Header.Get("ST"))
 	if err != nil {
-		log.Print(err)
 		return
 	}
 	mxHeader := r.Header.Get("MX")
 	mx, err := strconv.ParseInt(mxHeader, 10, 8)
 	if err != nil {
-		log.Print("invalid MX header: ", err)
 		return
 	}
 	if mx > 120 {
 		mx = 120
 	}
 	waitRandomMillis(mx * 1000)
-	res := http.Response{
-		ProtoMajor: 1,
-		ProtoMinor: 1,
-		StatusCode: 200,
-		Header: http.Header{
-			// Putting headers in here avoids them being title-cased.
-			// (The UPnP discovery protocol uses case-sensitive headers)
-			"Cache-Control": {"max-age=1800"},
-			"Location":      {fmt.Sprintf("http://%s/", srv.addr)},
-			"Server":        {vendor},
-			"EXT":           {""},
-			"USN":           {USN},
-			"ST":            {ST},
-			"Date":          {fmt.Sprintf("%v", time.Now().Format(time.RFC1123))},
-		},
-	}
-	wb := bufio.NewWriter(w)
-	res.Write(wb)
-	wb.Flush()
+	h := w.Header()
+	h.Set("Cache-Control", "max-age=1800")
+	h.Set("Location", fmt.Sprintf("http://%s:%d/", srv.serviceAddr.IP, srv.serviceAddr.Port))
+	h.Set("Server", vendor)
+	h.Set("EXT", "")
+	h.Set("USN", USN)
+	h.Set("ST", ST)
 }

@@ -7,6 +7,7 @@ import (
 	"go-upnp-playground/epgstation"
 	"html/template"
 	"log"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -50,13 +51,15 @@ func parseBrowseFilter(Filter string) browseFilter {
 	return filter
 }
 
-type Action struct{}
+type Action struct {
+	target net.TCPAddr
+}
 
 var jst = time.FixedZone("Asia/Tokyo", 9*60*60)
 
-func (a Action) Browse(ObjectID string, BrowseFlag string, Filter string, StartingIndex int, RequestedCount int, SortCriteria string) (string, int, int, int) {
-	log.Printf("[soap::Browse] ObjectID: %s, BrowseFlag: %s, Filter: %s, StartingIndex: %d, RequestedCount: %d, SortCriteria: %s", ObjectID, BrowseFlag, Filter, StartingIndex, RequestedCount, SortCriteria)
-	client, err := epgstation.NewClientWithResponses(fmt.Sprintf("http://%s:8888/api", os.Getenv("HOST_IP")))
+func (a *Action) Browse(ObjectID string, BrowseFlag string, Filter string, StartingIndex int, RequestedCount int, SortCriteria string) (string, int, int, int) {
+	// TODO: assuming EPGStation process is running on port 8888 on same host, but some may want to communicate with another host
+	client, err := epgstation.NewClientWithResponses(fmt.Sprintf("http://%s:%d/api", a.target.IP, a.target.Port))
 	if err != nil {
 		log.Fatalf("epgstation client init error: %s", err)
 	}
@@ -125,7 +128,7 @@ func (a Action) Browse(ObjectID string, BrowseFlag string, Filter string, Starti
 				"Total":          res.JSON200.Total, // used when ObjectID is "01"
 				"StartingIndex":  StartingIndex,     // used when ObjectID is "0"
 				"RequestedCount": RequestedCount,    // used when ObjectID is "0"
-				"HostIP":         hostIP,
+				"server":         a.target,
 				"filter":         parseBrowseFilter(Filter),
 			})
 		if err != nil {
