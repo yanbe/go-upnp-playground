@@ -3,11 +3,11 @@ package soap
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"go-upnp-playground/epgstation"
 	"html/template"
 	"log"
 	"net"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -52,7 +52,8 @@ func parseBrowseFilter(Filter string) browseFilter {
 }
 
 type Action struct {
-	target net.TCPAddr
+	serverAddr       net.TCPAddr
+	epgStationClient *epgstation.ClientWithResponses
 }
 
 var jst = time.FixedZone("Asia/Tokyo", 9*60*60)
@@ -73,23 +74,30 @@ func putBytesBuffer(bb *bytes.Buffer) {
 	bytesBufferPool.Put(bb)
 }
 
+var funcMap = template.FuncMap{
+	"date": func(t epgstation.UnixtimeMS) string { return time.Unix(int64(t)/1000, 0).In(jst).Format("2006-01-02") },
+	"mimetype": func(filename string) string {
+		switch filepath.Ext(filename) {
+		case ".m2ts":
+			return "video/mp2t"
+		case ".mp4":
+			return "video/mp4"
+		default:
+			return "application/octet-stream"
+		}
+	},
+}
+
 func (a *Action) Browse(ObjectID string, BrowseFlag string, Filter string, StartingIndex int, RequestedCount int, SortCriteria string) (string, int, int, int) {
 	// TODO: assuming EPGStation process is running on port 8888 on same host, but some may want to communicate with another host
-	client, err := epgstation.NewClientWithResponses(fmt.Sprintf("http://%s:%d/api", a.target.IP, a.target.Port))
-	if err != nil {
-		log.Fatalf("epgstation client init error: %s", err)
-	}
 	buf := newBytesBuffer()
 	defer putBytesBuffer(buf)
-	funcMap := template.FuncMap{
-		"date": func(t epgstation.UnixtimeMS) string { return time.Unix(int64(t)/1000, 0).In(jst).Format("2006-01-02") },
-	}
 	switch BrowseFlag {
 	case "BrowseMetadata":
 		var recordedItem *epgstation.RecordedItem
 		var total int
 		if ObjectID == "01" {
-			res, err := client.GetRecordedWithResponse(context.Background(), &epgstation.GetRecordedParams{
+			res, err := a.epgStationClient.GetRecordedWithResponse(context.Background(), &epgstation.GetRecordedParams{
 				IsHalfWidth: false,
 			})
 			if err != nil {
@@ -101,7 +109,7 @@ func (a *Action) Browse(ObjectID string, BrowseFlag string, Filter string, Start
 			if err != nil {
 				log.Fatalf("could not parse ObjectID as int: %s", ObjectID)
 			}
-			res, _ := client.GetRecordedRecordedIdWithResponse(context.Background(), epgstation.PathRecordedId(recordedId), &epgstation.GetRecordedRecordedIdParams{
+			res, _ := a.epgStationClient.GetRecordedRecordedIdWithResponse(context.Background(), epgstation.PathRecordedId(recordedId), &epgstation.GetRecordedRecordedIdParams{
 				IsHalfWidth: false,
 			})
 			recordedItem = res.JSON200
@@ -111,7 +119,7 @@ func (a *Action) Browse(ObjectID string, BrowseFlag string, Filter string, Start
 				"ObjectID":     ObjectID,
 				"RecordedItem": recordedItem, // available when ObjectID is neither "0" nor "01"
 				"Total":        total,        // available when ObjectID is "01"
-				"server":       a.target,
+				"server":       a.serverAddr,
 				"filter":       parseBrowseFilter(Filter),
 			})
 		if err != nil {
@@ -133,7 +141,7 @@ func (a *Action) Browse(ObjectID string, BrowseFlag string, Filter string, Start
 			isReverse := epgstation.IsReverse(true)
 			params.IsReverse = &isReverse
 		}
-		res, err := client.GetRecordedWithResponse(context.Background(), &params)
+		res, err := a.epgStationClient.GetRecordedWithResponse(context.Background(), &params)
 		if err != nil {
 			log.Fatalf("epgstation client getrecorded error: %s", err)
 		}
@@ -144,7 +152,7 @@ func (a *Action) Browse(ObjectID string, BrowseFlag string, Filter string, Start
 				"Total":          res.JSON200.Total, // used when ObjectID is "01"
 				"StartingIndex":  StartingIndex,     // used when ObjectID is "0"
 				"RequestedCount": RequestedCount,    // used when ObjectID is "0"
-				"server":         a.target,
+				"server":         a.serverAddr,
 				"filter":         parseBrowseFilter(Filter),
 			})
 		if err != nil {
@@ -181,7 +189,7 @@ func (a *Action) GetSearchCapabilities() string {
 	return "dc:title,dc:creator,dc:date,upnp:class,res@size"
 }
 
-func (a *Action) GetSortCapabilities() string {
+func (a Action) GetSortCapabilities() string {
 	// SortCapabilities
 	return "dc:date"
 }

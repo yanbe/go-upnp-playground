@@ -67,9 +67,6 @@ func (s *Server) Listen(hostIP net.IP) {
 	laddr.Port = 0
 	s.listener, _ = net.ListenTCP("tcp", &laddr) // start listen arbitorary port
 	s.addr = *s.listener.Addr().(*net.TCPAddr)
-
-	soap.EPGStationAddr.IP = s.addr.IP
-	soap.EPGStationAddr.Port = 8888
 }
 
 func (s *Server) Serve() error {
@@ -78,8 +75,13 @@ func (s *Server) Serve() error {
 		"addr": s.addr,
 	}))
 	http.HandleFunc("/ContentDirectory/scpd.xml", serveXMLDocHandler("tmpl/ContentDirectory1.xml", nil))
-	http.HandleFunc("/ContentDirectory/control.xml", serviceContentDirectoryControlHandler)
 	http.HandleFunc("/ConnectionManager/scpd.xml", serveXMLDocHandler("tmpl/ConnectionManager1.xml", nil))
+
+	epgstationAddr := net.TCPAddr{}
+	epgstationAddr.IP, epgstationAddr.Port = s.addr.IP, 8888
+	soap.SetupClient(epgstationAddr)
+
+	http.HandleFunc("/ContentDirectory/control.xml", serviceContentDirectoryControlHandler)
 	http.HandleFunc("/ConnectionManager/control.xml", serviceContentDirectoryControlHandler)
 
 	return http.Serve(s.listener, nil)

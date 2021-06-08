@@ -15,7 +15,7 @@
     {{if $root.filter.Date}}<dc:date>{{.StartAt | date}}</dc:date>{{end}}
     {{if $root.filter.WriteStatus}}<upnp:writeStatus>UNKNOWN</upnp:writeStatus>{{end}}
     {{- range .VideoFiles}}
-    <res protocolInfo="http-get:*:video/mp2t:*"{{if $root.filter.Res.Size}} size="{{.Size}}"{{end}}>http://{{$root.server.IP}}:{{$root.server.Port}}/api/videos/{{.Id}}</res>
+    <res protocolInfo="http-get:*:{{.Filename | mimetype}}:*"{{if $root.filter.Res.Size}} size="{{.Size}}"{{end}}>http://{{$root.server.IP}}:{{$root.server.Port}}/api/videos/{{.Id}}</res>
     {{- end}}
   </item>
   {{- end}}
