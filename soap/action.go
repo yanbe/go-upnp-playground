@@ -8,9 +8,9 @@ import (
 	"html/template"
 	"log"
 	"net"
-	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -56,6 +56,22 @@ type Action struct {
 }
 
 var jst = time.FixedZone("Asia/Tokyo", 9*60*60)
+var bytesBufferPool sync.Pool
+
+func newBytesBuffer() *bytes.Buffer {
+	if v := bytesBufferPool.Get(); v != nil {
+		bb := v.(*bytes.Buffer)
+		bb.Reset()
+		return bb
+	}
+	// Note: if this reader size is ever changed, update
+	// TestHandlerBodyClose's assumptions.
+	return &bytes.Buffer{}
+}
+
+func putBytesBuffer(bb *bytes.Buffer) {
+	bytesBufferPool.Put(bb)
+}
 
 func (a *Action) Browse(ObjectID string, BrowseFlag string, Filter string, StartingIndex int, RequestedCount int, SortCriteria string) (string, int, int, int) {
 	// TODO: assuming EPGStation process is running on port 8888 on same host, but some may want to communicate with another host
@@ -63,8 +79,8 @@ func (a *Action) Browse(ObjectID string, BrowseFlag string, Filter string, Start
 	if err != nil {
 		log.Fatalf("epgstation client init error: %s", err)
 	}
-	var buf bytes.Buffer
-	hostIP := os.Getenv("HOST_IP")
+	buf := newBytesBuffer()
+	defer putBytesBuffer(buf)
 	funcMap := template.FuncMap{
 		"date": func(t epgstation.UnixtimeMS) string { return time.Unix(int64(t)/1000, 0).In(jst).Format("2006-01-02") },
 	}
@@ -91,11 +107,11 @@ func (a *Action) Browse(ObjectID string, BrowseFlag string, Filter string, Start
 			recordedItem = res.JSON200
 		}
 		err := template.Must(template.New("browse-metadata.xml").Funcs(funcMap).ParseFiles("tmpl/browse-metadata.xml")).
-			Execute(&buf, map[string]interface{}{
+			Execute(buf, map[string]interface{}{
 				"ObjectID":     ObjectID,
 				"RecordedItem": recordedItem, // available when ObjectID is neither "0" nor "01"
 				"Total":        total,        // available when ObjectID is "01"
-				"HostIP":       hostIP,
+				"server":       a.target,
 				"filter":       parseBrowseFilter(Filter),
 			})
 		if err != nil {
@@ -109,7 +125,7 @@ func (a *Action) Browse(ObjectID string, BrowseFlag string, Filter string, Start
 			IsHalfWidth: false,
 			Offset:      &offset,
 		}
-		if RequestedCount > 0 { // to avoid EPGStation GET /record API error
+		if RequestedCount > 0 { // to avoid EPGStation API error, pass limit parameter to api endpoint only if it makes sense
 			limit := epgstation.Limit(RequestedCount)
 			params.Limit = &limit
 		}
@@ -122,7 +138,7 @@ func (a *Action) Browse(ObjectID string, BrowseFlag string, Filter string, Start
 			log.Fatalf("epgstation client getrecorded error: %s", err)
 		}
 		err = template.Must(template.New("browse-children.xml").Funcs(funcMap).ParseFiles("tmpl/browse-children.xml")).
-			Execute(&buf, map[string]interface{}{
+			Execute(buf, map[string]interface{}{
 				"ObjectID":       ObjectID,
 				"Records":        res.JSON200.Records,
 				"Total":          res.JSON200.Total, // used when ObjectID is "01"
@@ -155,17 +171,17 @@ func (a *Action) Browse(ObjectID string, BrowseFlag string, Filter string, Start
 	}
 }
 
-func (a Action) GetSystemUpdateID() int {
+func (a *Action) GetSystemUpdateID() int {
 	// SystemUpdateID
 	return 1
 }
 
-func (a Action) GetSearchCapabilities() string {
+func (a *Action) GetSearchCapabilities() string {
 	// SearchCapabilities
 	return "dc:title,dc:creator,dc:date,upnp:class,res@size"
 }
 
-func (a Action) GetSortCapabilities() string {
+func (a *Action) GetSortCapabilities() string {
 	// SortCapabilities
 	return "dc:date"
 }

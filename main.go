@@ -36,16 +36,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Print("Listening: ", localIP)
 	server.Listen(localIP)
+	serverAddr := server.Addr()
+	log.Printf("Listening: http://%s:%d/", serverAddr.IP, serverAddr.Port)
 
 	errSrv := make(chan error)
 	go func() {
 		errSrv <- server.Serve()
 	}()
 
-	ssdpadv := ssdp.NewSSDPAdvertiser(deviceUUID, server.Addr())
-	ssdpres := ssdp.NewSSDPDiscoveryResponder(deviceUUID, server.Addr())
+	ssdpadv := ssdp.NewSSDPAdvertiser(deviceUUID, serverAddr)
+	ssdpres := ssdp.NewSSDPDiscoveryResponder(deviceUUID, serverAddr)
 
 	errSsdpRes := make(chan error)
 	errSsdpAdvRes := make(chan error)
