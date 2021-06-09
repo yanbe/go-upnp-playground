@@ -2,29 +2,13 @@ package soap
 
 import (
 	"encoding/xml"
-	"fmt"
-	"go-upnp-playground/epgstation"
 	"io/ioutil"
-	"log"
-	"net"
 	"net/http"
 	"reflect"
 	"regexp"
 )
 
 const actionNameRegexp = `"urn:schemas-upnp-org:service:ContentDirectory:1#(.+)"`
-
-var soapAction = Action{}
-
-func SetupClient(epgstationAddr net.TCPAddr) {
-	soapAction.serverAddr = epgstationAddr
-	var err error
-	soapAction.epgStationClient, err = epgstation.NewClientWithResponses(fmt.Sprintf("http://%s:%d/api", epgstationAddr.IP, epgstationAddr.Port))
-	if err != nil {
-		log.Fatalf("epgstation client init error: %s", err)
-	}
-
-}
 
 func HandleAction(r *http.Request) []byte {
 	actionName := regexp.MustCompile(actionNameRegexp).FindStringSubmatch(r.Header.Get("SoapAction"))[1]
@@ -37,7 +21,7 @@ func HandleAction(r *http.Request) []byte {
 	for i := range argv {
 		argv[i] = reqStruct.Field(i + 1) // skip XMLName field
 	}
-	result := reflect.ValueOf(&soapAction).MethodByName(actionName).Call(argv)
+	result := reflect.ValueOf(&Action{}).MethodByName(actionName).Call(argv)
 
 	var soapRes Response
 	soapRes.EncodingStyle = "http://schemas.xmlsoap.org/soap/encoding/"

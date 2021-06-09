@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -69,8 +70,9 @@ type UDPResponseWriter struct {
 	calledHeader bool
 	wroteHeader  bool
 	status       int
-	bufw         *bufio.Writer
 	statusBuf    [3]byte
+	dateBuf      [len(http.TimeFormat)]byte
+	bufw         *bufio.Writer
 }
 
 type response struct {
@@ -120,6 +122,29 @@ func writeStatusLine(bw *bufio.Writer, is11 bool, code int, scratch []byte) {
 		fmt.Fprintf(bw, "%03d status code %d\r\n", code, code)
 	}
 }
+
+// appendTime is a non-allocating version of []byte(t.UTC().Format(TimeFormat))
+func appendTime(b []byte, t time.Time) []byte {
+	const days = "SunMonTueWedThuFriSat"
+	const months = "JanFebMarAprMayJunJulAugSepOctNovDec"
+
+	t = t.UTC()
+	yy, mm, dd := t.Date()
+	hh, mn, ss := t.Clock()
+	day := days[3*t.Weekday():]
+	mon := months[3*(mm-1):]
+
+	return append(b,
+		day[0], day[1], day[2], ',', ' ',
+		byte('0'+dd/10), byte('0'+dd%10), ' ',
+		mon[0], mon[1], mon[2], ' ',
+		byte('0'+yy/1000), byte('0'+(yy/100)%10), byte('0'+(yy/10)%10), byte('0'+yy%10), ' ',
+		byte('0'+hh/10), byte('0'+hh%10), ':',
+		byte('0'+mn/10), byte('0'+mn%10), ':',
+		byte('0'+ss/10), byte('0'+ss%10), ' ',
+		'G', 'M', 'T')
+}
+
 func (w *UDPResponseWriter) WriteHeader(code int) {
 	if w.wroteHeader {
 		log.Default().Fatal("httpu: superfluous response.WriteHeader")
@@ -131,6 +156,9 @@ func (w *UDPResponseWriter) WriteHeader(code int) {
 	w.wroteHeader = true
 	w.status = code
 	writeStatusLine(w.bufw, w.req.ProtoAtLeast(1, 1), code, w.statusBuf[:])
+	if w.Header().Get("Date") != "" {
+		w.Header().Set("Date", string(appendTime(w.dateBuf[:0], time.Now())))
+	}
 	w.header.WriteSubset(w.bufw, nil)
 	w.bufw.Write(crlf)
 }
@@ -191,11 +219,14 @@ func (t *UDPRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	buf := bufferpool.NewBytesBuffer()
 	defer bufferpool.PutBytesBuffer(buf)
-	req.Write(buf)
+	err = req.Write(buf)
+	if err != nil {
+		return nil, err
+	}
 	destAddr, err := net.ResolveUDPAddr("udp", req.Host)
 	if err != nil {
 		return nil, err
 	}
 	conn.WriteTo(buf.Bytes(), destAddr)
-	return &http.Response{}, nil
+	return nil, nil
 }

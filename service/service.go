@@ -11,6 +11,7 @@ import (
 	"text/template"
 
 	"go-upnp-playground/bufferpool"
+	"go-upnp-playground/epgstation"
 	"go-upnp-playground/soap"
 
 	"github.com/google/uuid"
@@ -79,9 +80,9 @@ func (s *Server) Serve() error {
 	http.HandleFunc("/ContentDirectory/scpd.xml", serveXMLDocHandler("tmpl/ContentDirectory1.xml", nil))
 	http.HandleFunc("/ConnectionManager/scpd.xml", serveXMLDocHandler("tmpl/ConnectionManager1.xml", nil))
 
-	epgstationAddr := net.TCPAddr{}
-	epgstationAddr.IP, epgstationAddr.Port = s.addr.IP, 8888
-	soap.SetupClient(epgstationAddr)
+	addr := net.TCPAddr{}
+	addr.IP, addr.Port = s.addr.IP, 8888
+	epgstation.Setup(addr)
 
 	http.HandleFunc("/ContentDirectory/control.xml", serviceContentDirectoryControlHandler)
 	http.HandleFunc("/ConnectionManager/control.xml", serviceContentDirectoryControlHandler)

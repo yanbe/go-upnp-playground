@@ -51,8 +51,7 @@ func parseBrowseFilter(Filter string) browseFilter {
 }
 
 type Action struct {
-	serverAddr       net.TCPAddr
-	epgStationClient *epgstation.ClientWithResponses
+	serverAddr net.TCPAddr
 }
 
 var jst = time.FixedZone("Asia/Tokyo", 9*60*60)
@@ -71,7 +70,7 @@ var funcMap = template.FuncMap{
 	},
 }
 
-func (a *Action) Browse(ObjectID string, BrowseFlag string, Filter string, StartingIndex int, RequestedCount int, SortCriteria string) (string, int, int, int) {
+func (a Action) Browse(ObjectID string, BrowseFlag string, Filter string, StartingIndex int, RequestedCount int, SortCriteria string) (string, int, int, int) {
 	buf := bufferpool.NewBytesBuffer()
 	defer bufferpool.PutBytesBuffer(buf)
 	switch BrowseFlag {
@@ -79,7 +78,7 @@ func (a *Action) Browse(ObjectID string, BrowseFlag string, Filter string, Start
 		var recordedItem *epgstation.RecordedItem
 		var total int
 		if ObjectID == "01" {
-			res, err := a.epgStationClient.GetRecordedWithResponse(context.Background(), &epgstation.GetRecordedParams{
+			res, err := epgstation.EPGStation.GetRecordedWithResponse(context.Background(), &epgstation.GetRecordedParams{
 				IsHalfWidth: false,
 			})
 			if err != nil {
@@ -91,7 +90,7 @@ func (a *Action) Browse(ObjectID string, BrowseFlag string, Filter string, Start
 			if err != nil {
 				log.Fatalf("could not parse ObjectID as int: %s", ObjectID)
 			}
-			res, _ := a.epgStationClient.GetRecordedRecordedIdWithResponse(context.Background(), epgstation.PathRecordedId(recordedId), &epgstation.GetRecordedRecordedIdParams{
+			res, _ := epgstation.EPGStation.GetRecordedRecordedIdWithResponse(context.Background(), epgstation.PathRecordedId(recordedId), &epgstation.GetRecordedRecordedIdParams{
 				IsHalfWidth: false,
 			})
 			recordedItem = res.JSON200
@@ -123,7 +122,7 @@ func (a *Action) Browse(ObjectID string, BrowseFlag string, Filter string, Start
 			isReverse := epgstation.IsReverse(true)
 			params.IsReverse = &isReverse
 		}
-		res, err := a.epgStationClient.GetRecordedWithResponse(context.Background(), &params)
+		res, err := epgstation.EPGStation.GetRecordedWithResponse(context.Background(), &params)
 		if err != nil {
 			log.Fatalf("epgstation client getrecorded error: %s", err)
 		}
@@ -161,12 +160,12 @@ func (a *Action) Browse(ObjectID string, BrowseFlag string, Filter string, Start
 	}
 }
 
-func (a *Action) GetSystemUpdateID() int {
+func (a Action) GetSystemUpdateID() int {
 	// SystemUpdateID
 	return 1
 }
 
-func (a *Action) GetSearchCapabilities() string {
+func (a Action) GetSearchCapabilities() string {
 	// SearchCapabilities
 	return "dc:title,dc:creator,dc:date,upnp:class,res@size"
 }

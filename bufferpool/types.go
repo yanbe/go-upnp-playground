@@ -10,10 +10,10 @@ import (
 var (
 	DefaultMaxMessageBytes = 2 << 10
 	bufBytesPool           sync.Pool
+	bytesBufferPool        sync.Pool
 	bufioReaderPool        sync.Pool
 	bufioWriter2kPool      sync.Pool
 	bufioWriter4kPool      sync.Pool
-	bytesBufferPool        sync.Pool
 )
 
 func NewBytesBuf() []byte {
