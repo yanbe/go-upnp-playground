@@ -1,6 +1,9 @@
 package soap
 
-import "encoding/xml"
+import (
+	"encoding/xml"
+	"go-upnp-playground/service/contentdirectory"
+)
 
 type Request struct {
 	XMLName       xml.Name `xml:"http://schemas.xmlsoap.org/soap/envelope/ Envelope"`
@@ -69,4 +72,12 @@ type GetSortCapabilities struct {
 type GetSortCapabilitiesResponse struct {
 	XMLName  xml.Name `xml:"urn:schemas-upnp-org:service:ContentDirectory:1 GetSortCapabilitiesResponse"`
 	SortCaps string
+}
+
+// <DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/">
+
+type DIDLLite struct {
+	XMLName    xml.Name `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ DIDL-Lite"`
+	Items      *[]contentdirectory.Item
+	Containers *[]contentdirectory.Container
 }

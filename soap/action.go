@@ -54,10 +54,10 @@ type Action struct {
 	serverAddr net.TCPAddr
 }
 
-var jst = time.FixedZone("Asia/Tokyo", 9*60*60)
+var JST = time.FixedZone("Asia/Tokyo", 9*60*60)
 
 var funcMap = template.FuncMap{
-	"date": func(t epgstation.UnixtimeMS) string { return time.Unix(int64(t)/1000, 0).In(jst).Format("2006-01-02") },
+	"date": func(t epgstation.UnixtimeMS) string { return time.Unix(int64(t)/1000, 0).In(JST).Format("2006-01-02") },
 	"mimetype": func(filename string) string {
 		switch filepath.Ext(filename) {
 		case ".m2ts":

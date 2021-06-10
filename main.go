@@ -36,7 +36,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	server.Listen(localIP)
+
+	server.Setup(localIP)
+	server.Listen()
 	serverAddr := server.Addr()
 	log.Printf("Listening: http://%s:%d/", serverAddr.IP, serverAddr.Port)
 

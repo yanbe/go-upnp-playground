@@ -25,7 +25,7 @@ func HandleAction(r *http.Request) []byte {
 
 	var soapRes Response
 	soapRes.EncodingStyle = "http://schemas.xmlsoap.org/soap/encoding/"
-	resStructFieldPtr := reflect.ValueOf(soapRes.Body).FieldByName(actionName + "Response") // pointer to nil
+	resStructFieldPtr := reflect.ValueOf(soapRes.Body).FieldByName(actionName + "Response")
 	resStructPtr := reflect.New(resStructFieldPtr.Type().Elem())
 	for i, v := range result {
 		resStructPtr.Elem().Field(i + 1).Set(v) // skip XMLName field
