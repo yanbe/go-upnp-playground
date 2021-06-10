@@ -3,8 +3,10 @@ package contentdirectory
 import (
 	"context"
 	"encoding/xml"
+	"fmt"
 	"go-upnp-playground/epgstation"
 	"log"
+	"path/filepath"
 	"strconv"
 	"time"
 )
@@ -110,11 +112,27 @@ func NewContainer(Id ObjectID, Parent *Container, Title string) *Container {
 	return &container
 }
 
+func mimeType(Filename string) string {
+	switch filepath.Ext(Filename) {
+	case ".m2ts":
+		return "video/mp2t"
+	case ".mp4":
+		return "video/mp4"
+	default:
+		return "application/octet-stream"
+	}
+}
+
 func NewItem(Parent *Container, recordedItem *epgstation.RecordedItem, channelItem *epgstation.ChannelItem) *Item {
 	if Parent == nil {
 		log.Fatal("container is required for item")
 	}
 
+	resources := make([]Res, len(*recordedItem.VideoFiles))
+	for i, videoFile := range *recordedItem.VideoFiles {
+		resources[i].ProtocolInfo = fmt.Sprintf("http-get:*:%s:*", mimeType(*videoFile.Filename))
+		resources[i].URL = fmt.Sprintf("%s/videos/%d", epgstation.ServerAPIRoot, videoFile.Id)
+	}
 	item := Item{
 		Id:         ObjectID(strconv.Itoa(int(recordedItem.Id))),
 		ParentID:   Parent.Id,
@@ -122,11 +140,13 @@ func NewItem(Parent *Container, recordedItem *epgstation.RecordedItem, channelIt
 		Class:      "object.item.videoItem",
 		Restricted: "true",
 
+		Resources: &resources,
+
 		Creator: channelItem.Name,
 		Date:    time.Unix(int64(recordedItem.StartAt)/1000, 0).In(JST).Format("2006-01-02"),
 	}
 	Registory[item.Id] = item
 	Parent.Children = append(Parent.Children, &item)
-	Parent.ChildCount += 1
+	Parent.ChildCount++
 	return &item
 }

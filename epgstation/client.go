@@ -10,10 +10,12 @@ import (
 )
 
 var EPGStation *ClientWithResponses
+var ServerAPIRoot string
 
 func Setup(epgstationAddr net.TCPAddr) {
 	var err error
-	EPGStation, err = NewClientWithResponses(fmt.Sprintf("http://%s:%d/api", epgstationAddr.IP, epgstationAddr.Port))
+	ServerAPIRoot = fmt.Sprintf("http://%s:%d/api", epgstationAddr.IP, epgstationAddr.Port)
+	EPGStation, err = NewClientWithResponses(ServerAPIRoot)
 	if err != nil {
 		log.Fatalf("epgstation client init error: %s", err)
 	}
