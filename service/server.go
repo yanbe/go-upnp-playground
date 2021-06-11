@@ -18,7 +18,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func serveXMLDocHandler(tmplFile string, vars map[string]interface{}) http.HandlerFunc {
+func serveXMLFileHandler(tmplFile string, vars map[string]interface{}) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/xml")
 		if len(vars) == 0 {
@@ -98,12 +98,12 @@ func (s *Server) Setup(hostIP net.IP) {
 
 	contentdirectory.Setup()
 
-	http.HandleFunc("/", serveXMLDocHandler("tmpl/device.xml", map[string]interface{}{
+	http.HandleFunc("/", serveXMLFileHandler("tmpl/device.xml", map[string]interface{}{
 		"uuid": s.deviceUUID,
 		"addr": &s.addr,
 	}))
-	http.HandleFunc("/ContentDirectory/scpd.xml", serveXMLDocHandler("tmpl/ContentDirectory1.xml", nil))
-	http.HandleFunc("/ConnectionManager/scpd.xml", serveXMLDocHandler("tmpl/ConnectionManager1.xml", nil))
+	http.HandleFunc("/ContentDirectory/scpd.xml", serveXMLFileHandler("file/ContentDirectory1.xml", nil))
+	http.HandleFunc("/ConnectionManager/scpd.xml", serveXMLFileHandler("file/ConnectionManager1.xml", nil))
 
 	http.HandleFunc("/ContentDirectory/control.xml", serviceContentDirectoryControlHandler)
 	http.HandleFunc("/ConnectionManager/control.xml", serviceContentDirectoryControlHandler)

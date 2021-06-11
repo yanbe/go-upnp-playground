@@ -83,9 +83,9 @@ type Item struct {
 }
 
 type Res struct {
-	XMLName      xml.Name     `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ res"`
-	ProtocolInfo string       `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ protocolInfo,attr"`
-	URL          xml.CharData `xml:",chardata"`
+	XMLName      xml.Name `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ res"`
+	ProtocolInfo string   `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ protocolInfo,attr"`
+	URL          string   `xml:",chardata"`
 }
 
 // <DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/">
@@ -138,7 +138,7 @@ func NewItem(Parent *Container, recordedItem *epgstation.RecordedItem, channelIt
 	resources := make([]Res, len(*recordedItem.VideoFiles))
 	for i, videoFile := range *recordedItem.VideoFiles {
 		resources[i].ProtocolInfo = fmt.Sprintf("http-get:*:%s:*", mimeType(*videoFile.Filename))
-		resources[i].URL = []byte(fmt.Sprintf("%s/videos/%d", epgstation.ServerAPIRoot, videoFile.Id))
+		resources[i].URL = fmt.Sprintf("%s/videos/%d", epgstation.ServerAPIRoot, videoFile.Id)
 	}
 	item := &Item{
 		Id:         ObjectID(strconv.Itoa(int(recordedItem.Id))),
