@@ -13,22 +13,14 @@ import (
 
 var JST = time.FixedZone("Asia/Tokyo", 9*60*60)
 
-type contentDirectory struct {
-	Root *Container
-}
-
 type ObjectID string
 
-var ContentDirectory contentDirectory
 var Registory = make(map[ObjectID]interface{})
 
 func Setup() {
 	log.Println("Setup ContentDirectory start")
 	rootContainer := NewContainer("0", nil, "Root")
-	ContentDirectory = contentDirectory{
-		Root: rootContainer,
-	}
-	recordedContainer := NewContainer("01", ContentDirectory.Root, "Recorded")
+	recordedContainer := NewContainer("01", rootContainer, "Recorded")
 
 	resChannels, err := epgstation.EPGStation.GetChannelsWithResponse(context.Background())
 	if err != nil {
@@ -64,8 +56,16 @@ type Container struct {
 	Children   []interface{} `xml:"-"`
 }
 
-func (c *Container) AppendChild(child *interface{}) {
+func (c *Container) AppendContainer(child *Container) {
 	c.Children = append(c.Children, child)
+	c.ChildCount++
+	Registory[child.Id] = child
+}
+
+func (c *Container) AppendItem(item *Item) {
+	c.Children = append(c.Children, item)
+	c.ChildCount++
+	Registory[item.Id] = item
 }
 
 type Item struct {
@@ -96,20 +96,20 @@ func NewContainer(Id ObjectID, Parent *Container, Title string) *Container {
 	default:
 		parentID, objectID = Parent.Id, Id
 	}
-	container := Container{
+	container := &Container{
 		Id:         objectID,
 		ParentID:   parentID,
 		Title:      Title,
 		Class:      "object.container",
 		Restricted: "true",
 		Children:   make([]interface{}, 0),
+		ChildCount: 0,
 	}
 	Registory[container.Id] = container
 	if Parent != nil {
-		Parent.ChildCount += 1
-		Parent.Children = append(Parent.Children, &container)
+		Parent.AppendContainer(container)
 	}
-	return &container
+	return container
 }
 
 func mimeType(Filename string) string {
@@ -133,7 +133,7 @@ func NewItem(Parent *Container, recordedItem *epgstation.RecordedItem, channelIt
 		resources[i].ProtocolInfo = fmt.Sprintf("http-get:*:%s:*", mimeType(*videoFile.Filename))
 		resources[i].URL = fmt.Sprintf("%s/videos/%d", epgstation.ServerAPIRoot, videoFile.Id)
 	}
-	item := Item{
+	item := &Item{
 		Id:         ObjectID(strconv.Itoa(int(recordedItem.Id))),
 		ParentID:   Parent.Id,
 		Title:      recordedItem.Name,
@@ -145,8 +145,6 @@ func NewItem(Parent *Container, recordedItem *epgstation.RecordedItem, channelIt
 		Creator: channelItem.Name,
 		Date:    time.Unix(int64(recordedItem.StartAt)/1000, 0).In(JST).Format("2006-01-02"),
 	}
-	Registory[item.Id] = item
-	Parent.Children = append(Parent.Children, &item)
-	Parent.ChildCount++
-	return &item
+	Parent.AppendItem(item)
+	return item
 }

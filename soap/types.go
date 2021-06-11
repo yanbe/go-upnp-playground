@@ -78,6 +78,6 @@ type GetSortCapabilitiesResponse struct {
 
 type DIDLLite struct {
 	XMLName    xml.Name `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ DIDL-Lite"`
-	Items      *[]contentdirectory.Item
-	Containers *[]contentdirectory.Container
+	Items      []*contentdirectory.Item
+	Containers []*contentdirectory.Container
 }

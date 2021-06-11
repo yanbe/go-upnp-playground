@@ -2,13 +2,14 @@ package soap
 
 import (
 	"context"
+	"encoding/xml"
 	"go-upnp-playground/bufferpool"
 	"go-upnp-playground/epgstation"
+	"go-upnp-playground/service/contentdirectory"
 	"html/template"
 	"log"
 	"net"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -75,39 +76,25 @@ func (a Action) Browse(ObjectID string, BrowseFlag string, Filter string, Starti
 	defer bufferpool.PutBytesBuffer(buf)
 	switch BrowseFlag {
 	case "BrowseMetadata":
-		var recordedItem *epgstation.RecordedItem
-		var total int
-		if ObjectID == "01" {
-			res, err := epgstation.EPGStation.GetRecordedWithResponse(context.Background(), &epgstation.GetRecordedParams{
-				IsHalfWidth: false,
-			})
+		object := contentdirectory.Registory[contentdirectory.ObjectID(ObjectID)]
+		container, ok := object.(*contentdirectory.Container)
+		wrapper := DIDLLite{}
+		if ok {
+			wrapper.Containers = append(wrapper.Containers, container)
+			data, err := xml.Marshal(wrapper)
 			if err != nil {
-				log.Fatalf("could not get records from EPGStation: %s", err)
+				log.Fatal(err)
 			}
-			total = res.JSON200.Total
+			return string(data), 1, 1, a.GetSystemUpdateID()
 		} else {
-			recordedId, err := strconv.ParseInt(ObjectID, 10, 8)
+			item := object.(*contentdirectory.Item)
+			wrapper.Items = append(wrapper.Items, item)
+			data, err := xml.Marshal(item)
 			if err != nil {
-				log.Fatalf("could not parse ObjectID as int: %s", ObjectID)
+				log.Fatal(err)
 			}
-			res, _ := epgstation.EPGStation.GetRecordedRecordedIdWithResponse(context.Background(), epgstation.PathRecordedId(recordedId), &epgstation.GetRecordedRecordedIdParams{
-				IsHalfWidth: false,
-			})
-			recordedItem = res.JSON200
+			return string(data), 1, 1, a.GetSystemUpdateID()
 		}
-		err := template.Must(template.New("browse-metadata.xml").Funcs(funcMap).ParseFiles("tmpl/browse-metadata.xml")).
-			Execute(buf, map[string]interface{}{
-				"ObjectID":     ObjectID,
-				"RecordedItem": recordedItem, // available when ObjectID is neither "0" nor "01"
-				"Total":        total,        // available when ObjectID is "01"
-				"server":       a.serverAddr,
-				"filter":       parseBrowseFilter(Filter),
-			})
-		if err != nil {
-			log.Fatal(err)
-		}
-		// Result, NumberReturned, TotalMatches, UpdateID
-		return buf.String(), 1, 1, a.GetSystemUpdateID()
 	case "BrowseDirectChildren":
 		offset := epgstation.Offset(StartingIndex)
 		params := epgstation.GetRecordedParams{

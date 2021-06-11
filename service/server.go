@@ -100,7 +100,7 @@ func (s *Server) Setup(hostIP net.IP) {
 
 	http.HandleFunc("/", serveXMLDocHandler("tmpl/device.xml", map[string]interface{}{
 		"uuid": s.deviceUUID,
-		"addr": s.addr,
+		"addr": &s.addr,
 	}))
 	http.HandleFunc("/ContentDirectory/scpd.xml", serveXMLDocHandler("tmpl/ContentDirectory1.xml", nil))
 	http.HandleFunc("/ConnectionManager/scpd.xml", serveXMLDocHandler("tmpl/ConnectionManager1.xml", nil))
@@ -121,7 +121,7 @@ func (s *Server) Listen() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	s.addr = *s.listener.Addr().(*net.TCPAddr)
+	s.addr.Port = s.listener.Addr().(*net.TCPAddr).Port
 }
 
 func (s *Server) Serve() error {
