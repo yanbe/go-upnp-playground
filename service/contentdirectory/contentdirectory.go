@@ -83,9 +83,16 @@ type Item struct {
 }
 
 type Res struct {
-	XMLName      xml.Name `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ res"`
-	ProtocolInfo string   `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ protocolInfo,attr"`
-	URL          string   `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ res,chardata"`
+	XMLName      xml.Name     `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ res"`
+	ProtocolInfo string       `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ protocolInfo,attr"`
+	URL          xml.CharData `xml:",chardata"`
+}
+
+// <DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/">
+
+type DIDLLite struct {
+	XMLName xml.Name `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ DIDL-Lite"`
+	Objects []interface{}
 }
 
 func NewContainer(Id ObjectID, Parent *Container, Title string) *Container {
@@ -131,7 +138,7 @@ func NewItem(Parent *Container, recordedItem *epgstation.RecordedItem, channelIt
 	resources := make([]Res, len(*recordedItem.VideoFiles))
 	for i, videoFile := range *recordedItem.VideoFiles {
 		resources[i].ProtocolInfo = fmt.Sprintf("http-get:*:%s:*", mimeType(*videoFile.Filename))
-		resources[i].URL = fmt.Sprintf("%s/videos/%d", epgstation.ServerAPIRoot, videoFile.Id)
+		resources[i].URL = []byte(fmt.Sprintf("%s/videos/%d", epgstation.ServerAPIRoot, videoFile.Id))
 	}
 	item := &Item{
 		Id:         ObjectID(strconv.Itoa(int(recordedItem.Id))),
@@ -147,4 +154,45 @@ func NewItem(Parent *Container, recordedItem *epgstation.RecordedItem, channelIt
 	}
 	Parent.AppendItem(item)
 	return item
+}
+
+func MarshalMetadata(objectID string) string {
+	object := Registory[ObjectID(objectID)]
+	wrapper := DIDLLite{}
+	wrapper.Objects = append(wrapper.Objects, &object)
+	data, err := xml.Marshal(wrapper)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return string(data)
+}
+
+func MarshalDirectChildren(objectID string, StartingIndex int, RequestedCount int) string {
+	object := Registory[ObjectID(objectID)]
+	container, ok := object.(*Container)
+	if !ok {
+		log.Fatalf("passed objectID %s not found as a container", objectID)
+	}
+	wrapper := DIDLLite{}
+	var min, max int
+	if StartingIndex < cap(container.Children) {
+		min = StartingIndex
+	} else {
+		min = cap(container.Children)
+	}
+	if StartingIndex+RequestedCount <= cap(container.Children) {
+		max = StartingIndex + RequestedCount
+	} else {
+		max = cap(container.Children)
+	}
+	wrapper.Objects = container.Children[min:max]
+	data, err := xml.Marshal(wrapper)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return string(data)
+}
+
+func GetObject(objectID string) interface{} {
+	return Registory[ObjectID(objectID)]
 }

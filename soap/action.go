@@ -1,8 +1,6 @@
 package soap
 
 import (
-	"context"
-	"encoding/xml"
 	"go-upnp-playground/bufferpool"
 	"go-upnp-playground/epgstation"
 	"go-upnp-playground/service/contentdirectory"
@@ -76,70 +74,10 @@ func (a Action) Browse(ObjectID string, BrowseFlag string, Filter string, Starti
 	defer bufferpool.PutBytesBuffer(buf)
 	switch BrowseFlag {
 	case "BrowseMetadata":
-		object := contentdirectory.Registory[contentdirectory.ObjectID(ObjectID)]
-		container, ok := object.(*contentdirectory.Container)
-		wrapper := DIDLLite{}
-		if ok {
-			wrapper.Containers = append(wrapper.Containers, container)
-			data, err := xml.Marshal(wrapper)
-			if err != nil {
-				log.Fatal(err)
-			}
-			return string(data), 1, 1, a.GetSystemUpdateID()
-		} else {
-			item := object.(*contentdirectory.Item)
-			wrapper.Items = append(wrapper.Items, item)
-			data, err := xml.Marshal(item)
-			if err != nil {
-				log.Fatal(err)
-			}
-			return string(data), 1, 1, a.GetSystemUpdateID()
-		}
+		return contentdirectory.MarshalMetadata(ObjectID), 1, 1, a.GetSystemUpdateID()
 	case "BrowseDirectChildren":
-		offset := epgstation.Offset(StartingIndex)
-		params := epgstation.GetRecordedParams{
-			IsHalfWidth: false,
-			Offset:      &offset,
-		}
-		if RequestedCount > 0 { // to avoid EPGStation API error, pass limit parameter to api endpoint only if it makes sense
-			limit := epgstation.Limit(RequestedCount)
-			params.Limit = &limit
-		}
-		if SortCriteria == "+dc:date" {
-			isReverse := epgstation.IsReverse(true)
-			params.IsReverse = &isReverse
-		}
-		res, err := epgstation.EPGStation.GetRecordedWithResponse(context.Background(), &params)
-		if err != nil {
-			log.Fatalf("epgstation client getrecorded error: %s", err)
-		}
-		err = template.Must(template.New("browse-children.xml").Funcs(funcMap).ParseFiles("tmpl/browse-children.xml")).
-			Execute(buf, map[string]interface{}{
-				"ObjectID":       ObjectID,
-				"Records":        res.JSON200.Records,
-				"Total":          res.JSON200.Total, // used when ObjectID is "01"
-				"StartingIndex":  StartingIndex,     // used when ObjectID is "0"
-				"RequestedCount": RequestedCount,    // used when ObjectID is "0"
-				"server":         a.serverAddr,
-				"filter":         parseBrowseFilter(Filter),
-			})
-		if err != nil {
-			log.Fatal(err)
-		}
-		switch ObjectID {
-		case "0":
-			// Result, NumberReturned, TotalMatches, UpdateID
-			if StartingIndex == 0 {
-				return buf.String(), 1, 1, a.GetSystemUpdateID()
-			} else {
-				return buf.String(), 0, 1, a.GetSystemUpdateID()
-			}
-		case "01":
-			return buf.String(), len(res.JSON200.Records), res.JSON200.Total, a.GetSystemUpdateID()
-		default:
-			return buf.String(), 0, 0, a.GetSystemUpdateID()
-		}
-
+		container := contentdirectory.GetObject(ObjectID).(*contentdirectory.Container)
+		return contentdirectory.MarshalDirectChildren(ObjectID, StartingIndex, RequestedCount), container.ChildCount - StartingIndex, container.ChildCount, a.GetSystemUpdateID()
 	default:
 		log.Printf("invalid BrowseFlag: %s", BrowseFlag)
 		// Result, NumberReturned, TotalMatches, UpdateID
