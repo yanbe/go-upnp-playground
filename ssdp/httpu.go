@@ -29,11 +29,11 @@ type Handler interface {
 
 // A Server defines parameters for running an HTTPU server.
 type SSDPDiscoveryResponder struct {
-	serviceAddr net.TCPAddr    // TCP address to listen on
-	Multicast   bool           // Should listen for multicast?
-	Interface   *net.Interface // Network interface to listen on for multicast, nil for default multicast interface
-	Handler     Handler        // handler to invoke
-	deviceUUID  uuid.UUID
+	urlBase    string         // TCP address to listen on
+	Multicast  bool           // Should listen for multicast?
+	Interface  *net.Interface // Network interface to listen on for multicast, nil for default multicast interface
+	Handler    Handler        // handler to invoke
+	deviceUUID uuid.UUID
 }
 
 // ListenAndServe listens on the UDP network address srv.Addr. If srv.Multicast

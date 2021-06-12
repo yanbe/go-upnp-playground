@@ -21,8 +21,8 @@ const (
 )
 
 type SSDPAdvertiser struct {
-	deviceUUID  uuid.UUID
-	serviceAddr net.TCPAddr
+	deviceUUID uuid.UUID
+	urlBase    string
 }
 
 func (s *SSDPAdvertiser) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -40,10 +40,10 @@ func (s *SSDPAdvertiser) RoundTrip(req *http.Request) (*http.Response, error) {
 	return &http.Response{}, nil
 }
 
-func NewSSDPAdvertiser(deviceUUID uuid.UUID, serviceAddr net.TCPAddr) SSDPAdvertiser {
+func NewSSDPAdvertiser(deviceUUID uuid.UUID, urlBase string) SSDPAdvertiser {
 	return SSDPAdvertiser{
-		deviceUUID:  deviceUUID,
-		serviceAddr: serviceAddr,
+		deviceUUID: deviceUUID,
+		urlBase:    urlBase,
 	}
 }
 
@@ -72,7 +72,7 @@ func (s *SSDPAdvertiser) notifyTarget(target string) {
 			// Putting headers in here avoids them being title-cased.
 			// (The UPnP discovery protocol uses case-sensitive headers)
 			"Cache-Control": {fmt.Sprintf("max-age=%d", maxAge)},
-			"Location":      {fmt.Sprintf("http://%s:%d/", s.serviceAddr.IP, s.serviceAddr.Port)},
+			"Location":      {s.urlBase},
 			"Server":        {serverName},
 			"NT":            {NT},
 			"NTS":           {ntsAlive},

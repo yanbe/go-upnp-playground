@@ -4,7 +4,7 @@
 		<major>1</major> 
 		<minor>0</minor> 
 	</specVersion> 
-	<URLBase>http://{{.addr.IP}}:{{.addr.Port}}/</URLBase>
+	<URLBase>{{.URLBase}}</URLBase>
 	<device> 
 		<deviceType>urn:schemas-upnp-org:device:MediaServer:1</deviceType>
 		<INMPR03>1.0</INMPR03>

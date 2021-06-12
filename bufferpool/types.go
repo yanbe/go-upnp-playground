@@ -24,6 +24,14 @@ func NewBytesBuf() []byte {
 	return make([]byte, DefaultMaxMessageBytes)
 }
 
+func NewBytesBufSize(size int) []byte {
+	if v := bufBytesPool.Get(); v != nil {
+		buf := v.(*[]byte)
+		return *buf
+	}
+	return make([]byte, DefaultMaxMessageBytes)
+}
+
 func PutBytesBuf(buf []byte) {
 	bufBytesPool.Put(&buf)
 }

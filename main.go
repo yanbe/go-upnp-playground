@@ -31,24 +31,23 @@ func localIP() (net.IP, error) {
 
 func main() {
 	deviceUUID := uuid.New()
-	server := service.NewServer(deviceUUID)
 	localIP, err := localIP()
+	server := service.NewServer(deviceUUID, localIP)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	server.Setup(localIP)
 	server.Listen()
-	serverAddr := server.Addr()
-	log.Printf("Listening: http://%s:%d/", serverAddr.IP, serverAddr.Port)
+	log.Println("Listening: ", service.URLBase)
+	server.Setup()
 
 	errSrv := make(chan error)
 	go func() {
 		errSrv <- server.Serve()
 	}()
 
-	ssdpadv := ssdp.NewSSDPAdvertiser(deviceUUID, serverAddr)
-	ssdpres := ssdp.NewSSDPDiscoveryResponder(deviceUUID, serverAddr)
+	ssdpadv := ssdp.NewSSDPAdvertiser(deviceUUID, service.URLBase)
+	ssdpres := ssdp.NewSSDPDiscoveryResponder(deviceUUID, service.URLBase)
 
 	errSsdpRes := make(chan error)
 	errSsdpAdvRes := make(chan error)

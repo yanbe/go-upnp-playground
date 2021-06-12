@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -21,11 +20,11 @@ const (
 	vendor                = "Linux/i686 UPnP/1.0 go-upnp-playground/0.0.1"
 )
 
-func NewSSDPDiscoveryResponder(deviceUUID uuid.UUID, serviceAddr net.TCPAddr) SSDPDiscoveryResponder {
+func NewSSDPDiscoveryResponder(deviceUUID uuid.UUID, urlBase string) SSDPDiscoveryResponder {
 	return SSDPDiscoveryResponder{
-		Multicast:   true,
-		deviceUUID:  deviceUUID,
-		serviceAddr: serviceAddr,
+		Multicast:  true,
+		deviceUUID: deviceUUID,
+		urlBase:    urlBase,
 	}
 }
 
@@ -73,7 +72,7 @@ func (srv *SSDPDiscoveryResponder) ServeMessage(w http.ResponseWriter, r *http.R
 	waitRandomMillis(mx * 1000)
 	h := w.Header()
 	h.Set("Cache-Control", "max-age=1800")
-	h.Set("Location", fmt.Sprintf("http://%s:%d/", srv.serviceAddr.IP, srv.serviceAddr.Port))
+	h.Set("Location", srv.urlBase)
 	h.Set("Server", vendor)
 	h.Set("EXT", "")
 	h.Set("USN", USN)

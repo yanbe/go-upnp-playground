@@ -15,21 +15,15 @@ var JST = time.FixedZone("Asia/Tokyo", 9*60*60)
 
 type ObjectID string
 
-var Registory = make(map[ObjectID]interface{})
+var registory = make(map[ObjectID]interface{})
+var serviceURLBase string
 
-func Setup() {
+func Setup(ServiceURLBase string) {
 	log.Println("Setup ContentDirectory start")
+	serviceURLBase = ServiceURLBase
+
 	rootContainer := NewContainer("0", nil, "Root")
 	recordedContainer := NewContainer("01", rootContainer, "Recorded")
-
-	resChannels, err := epgstation.EPGStation.GetChannelsWithResponse(context.Background())
-	if err != nil {
-		log.Fatal(err)
-	}
-	channelMap := make(map[epgstation.ChannelId]*epgstation.ChannelItem)
-	for _, channelItem := range *resChannels.JSON200 {
-		channelMap[channelItem.Id] = &channelItem
-	}
 
 	res, err := epgstation.EPGStation.GetRecordedWithResponse(context.Background(), &epgstation.GetRecordedParams{
 		IsHalfWidth: false,
@@ -38,7 +32,7 @@ func Setup() {
 		log.Fatal(err)
 	}
 	for _, recordedItem := range res.JSON200.Records {
-		NewItem(recordedContainer, &recordedItem, channelMap[*recordedItem.ChannelId])
+		NewItem(recordedContainer, &recordedItem)
 	}
 	log.Printf("Setup ContentDirectory complete. %d items found", recordedContainer.ChildCount)
 }
@@ -59,13 +53,13 @@ type Container struct {
 func (c *Container) AppendContainer(child *Container) {
 	c.Children = append(c.Children, child)
 	c.ChildCount++
-	Registory[child.Id] = child
+	registory[child.Id] = child
 }
 
 func (c *Container) AppendItem(item *Item) {
 	c.Children = append(c.Children, item)
 	c.ChildCount++
-	Registory[item.Id] = item
+	registory[item.Id] = item
 }
 
 type Item struct {
@@ -77,7 +71,6 @@ type Item struct {
 	Class      string   `xml:"urn:schemas-upnp-org:metadata-1-0/upnp/ class"`
 	Restricted string   `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ restricted,attr"`
 
-	Creator   string `xml:"http://purl.org/dc/elements/1.1/ creator"`
 	Date      string `xml:"http://purl.org/dc/elements/1.1/ date"`
 	Resources *[]Res
 }
@@ -85,6 +78,8 @@ type Item struct {
 type Res struct {
 	XMLName      xml.Name `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ res"`
 	ProtocolInfo string   `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ protocolInfo,attr"`
+	Size         int      `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ size,attr"`
+	Duration     string   `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ duuration,attr"`
 	URL          string   `xml:",chardata"`
 }
 
@@ -112,7 +107,7 @@ func NewContainer(Id ObjectID, Parent *Container, Title string) *Container {
 		Children:   make([]interface{}, 0),
 		ChildCount: 0,
 	}
-	Registory[container.Id] = container
+	registory[container.Id] = container
 	if Parent != nil {
 		Parent.AppendContainer(container)
 	}
@@ -130,15 +125,29 @@ func mimeType(Filename string) string {
 	}
 }
 
-func NewItem(Parent *Container, recordedItem *epgstation.RecordedItem, channelItem *epgstation.ChannelItem) *Item {
+func fmtDuration(d time.Duration) string {
+	h := d / time.Hour
+	d -= h * time.Hour
+	m := d / time.Minute
+	d -= m * time.Minute
+	s := d / time.Second
+	d -= m * time.Second
+
+	return fmt.Sprintf("%d:%02d:%02d", h, m, s)
+}
+
+func NewItem(Parent *Container, recordedItem *epgstation.RecordedItem) *Item {
 	if Parent == nil {
 		log.Fatal("container is required for item")
 	}
 
 	resources := make([]Res, len(*recordedItem.VideoFiles))
 	for i, videoFile := range *recordedItem.VideoFiles {
-		resources[i].ProtocolInfo = fmt.Sprintf("http-get:*:%s:*", mimeType(*videoFile.Filename))
-		resources[i].URL = fmt.Sprintf("%s/videos/%d", epgstation.ServerAPIRoot, videoFile.Id)
+		resources[i].ProtocolInfo = fmt.Sprintf("http-get:*:%s:DLNA.ORG_OP=01", mimeType(*videoFile.Filename))
+		resources[i].URL = fmt.Sprintf("%svideos/recorded?videoFileId=%d", serviceURLBase, videoFile.Id)
+		resources[i].Size = videoFile.Size
+		d := time.Duration(recordedItem.EndAt-recordedItem.StartAt) * time.Millisecond
+		resources[i].Duration = fmtDuration(d)
 	}
 	item := &Item{
 		Id:         ObjectID(strconv.Itoa(int(recordedItem.Id))),
@@ -149,15 +158,14 @@ func NewItem(Parent *Container, recordedItem *epgstation.RecordedItem, channelIt
 
 		Resources: &resources,
 
-		Creator: channelItem.Name,
-		Date:    time.Unix(int64(recordedItem.StartAt)/1000, 0).In(JST).Format("2006-01-02"),
+		Date: time.Unix(int64(recordedItem.StartAt)/1000, 0).In(JST).Format("2006-01-02"),
 	}
 	Parent.AppendItem(item)
 	return item
 }
 
 func MarshalMetadata(objectID string) string {
-	object := Registory[ObjectID(objectID)]
+	object := registory[ObjectID(objectID)]
 	wrapper := DIDLLite{}
 	wrapper.Objects = append(wrapper.Objects, &object)
 	data, err := xml.Marshal(wrapper)
@@ -168,7 +176,7 @@ func MarshalMetadata(objectID string) string {
 }
 
 func MarshalDirectChildren(objectID string, StartingIndex int, RequestedCount int) string {
-	object := Registory[ObjectID(objectID)]
+	object := registory[ObjectID(objectID)]
 	container, ok := object.(*Container)
 	if !ok {
 		log.Fatalf("passed objectID %s not found as a container", objectID)
@@ -194,5 +202,5 @@ func MarshalDirectChildren(objectID string, StartingIndex int, RequestedCount in
 }
 
 func GetObject(objectID string) interface{} {
-	return Registory[ObjectID(objectID)]
+	return registory[ObjectID(objectID)]
 }

@@ -32,10 +32,10 @@ func (a Action) GetSystemUpdateID() int {
 
 func (a Action) GetSearchCapabilities() string {
 	// SearchCapabilities
-	return "dc:title,dc:creator,dc:date,upnp:class,res@size"
+	return ""
 }
 
 func (a Action) GetSortCapabilities() string {
 	// SortCapabilities
-	return "dc:date"
+	return ""
 }

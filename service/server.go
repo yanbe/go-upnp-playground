@@ -2,10 +2,12 @@ package service
 
 import (
 	"encoding/xml"
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"os"
 	"strconv"
 	"text/template"
@@ -17,6 +19,8 @@ import (
 
 	"github.com/google/uuid"
 )
+
+var URLBase string
 
 func serveXMLFileHandler(tmplFile string, vars map[string]interface{}) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -44,7 +48,6 @@ func serveXMLFileHandler(tmplFile string, vars map[string]interface{}) http.Hand
 
 func serviceContentDirectoryControlHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", `text/xml; charset="utf-8"`)
-	w.Header().Set("Ext", "")
 	w.Header().Set("Server", "Linux/i686 UPnP/1.0 go-upnp-playground/0.0.1")
 	buf := bufferpool.NewBytesBuffer()
 	defer bufferpool.PutBytesBuffer(buf)
@@ -55,52 +58,64 @@ func serviceContentDirectoryControlHandler(w http.ResponseWriter, r *http.Reques
 }
 
 func recordedVideoStreamHandler(w http.ResponseWriter, r *http.Request) {
-	r.URL.Query().Get("id")
-	w.Header().Set("Content-Type", `text/xml; charset="utf-8"`)
-	w.Header().Set("Server", "Linux/i686 UPnP/1.0 go-upnp-playground/0.0.1")
-	buf := bufferpool.NewBytesBuffer()
-	defer bufferpool.PutBytesBuffer(buf)
-	buf.WriteString(xml.Header)
-	buf.Write(soap.HandleAction(r))
-	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
-	w.Write(buf.Bytes())
-}
+	dump, _ := httputil.DumpRequest(r, false)
+	log.Println(string(dump))
+	videoFileId := r.URL.Query().Get("videoFileId")
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/videos/%s", epgstation.ServerAPIRoot, videoFileId), nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for k, vs := range r.Header {
+		req.Header.Set(k, vs[0])
+	}
+	client := new(http.Client)
+	res, err := client.Do(req)
+	dumpRes, _ := httputil.DumpResponse(res, false)
+	log.Println(string(dumpRes))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer res.Body.Close()
+	for k, vs := range res.Header {
+		w.Header().Set(k, vs[0])
+	}
+	w.WriteHeader(res.StatusCode)
 
-func liveVideoStreamHandler(w http.ResponseWriter, r *http.Request) {
-	r.URL.Query().Get("id")
-	w.Header().Set("Content-Type", `text/xml; charset="utf-8"`)
-	w.Header().Set("Server", "Linux/i686 UPnP/1.0 go-upnp-playground/0.0.1")
-	buf := bufferpool.NewBytesBuffer()
-	defer bufferpool.PutBytesBuffer(buf)
-	buf.WriteString(xml.Header)
-	buf.Write(soap.HandleAction(r))
-	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
-	w.Write(buf.Bytes())
+	io.Copy(w, res.Body)
 }
 
 // A Server defines parameters for running an HTTPU server.
 type Server struct {
 	deviceUUID uuid.UUID
+	hostIP     net.IP
 	listener   *net.TCPListener
-	addr       net.TCPAddr
 }
 
-func (s *Server) Addr() net.TCPAddr {
-	return s.addr
+func (s *Server) Listen() {
+	var err error
+	s.listener, err = net.ListenTCP("tcp", &net.TCPAddr{
+		IP:   s.hostIP,
+		Port: 0,
+	}) // start listen arbitorary port
+	if err != nil {
+		log.Fatal(err)
+	}
+	listenAddr := s.listener.Addr().(*net.TCPAddr)
+	URLBase = fmt.Sprintf("http://%s:%d/", listenAddr.IP, listenAddr.Port)
 }
 
-func (s *Server) Setup(hostIP net.IP) {
-	s.addr.IP = hostIP
-
-	addr := net.TCPAddr{}
-	addr.IP, addr.Port = hostIP, 8888
+func (s *Server) Setup() {
+	addr := net.TCPAddr{
+		IP:   s.hostIP,
+		Port: 8888,
+	}
 	epgstation.Setup(addr)
 
-	contentdirectory.Setup()
+	contentdirectory.Setup(URLBase)
 
 	http.HandleFunc("/", serveXMLFileHandler("tmpl/device.xml", map[string]interface{}{
-		"uuid": s.deviceUUID,
-		"addr": &s.addr,
+		"uuid":    s.deviceUUID,
+		"URLBase": URLBase,
 	}))
 	http.HandleFunc("/ContentDirectory/scpd.xml", serveXMLFileHandler("file/ContentDirectory1.xml", nil))
 	http.HandleFunc("/ConnectionManager/scpd.xml", serveXMLFileHandler("file/ConnectionManager1.xml", nil))
@@ -108,29 +123,17 @@ func (s *Server) Setup(hostIP net.IP) {
 	http.HandleFunc("/ContentDirectory/control.xml", serviceContentDirectoryControlHandler)
 	http.HandleFunc("/ConnectionManager/control.xml", serviceContentDirectoryControlHandler)
 
-	http.HandleFunc("/Streams/recorded", recordedVideoStreamHandler)
-	http.HandleFunc("/Streams/live", liveVideoStreamHandler)
-}
-
-func (s *Server) Listen() {
-	laddr := net.TCPAddr{}
-	laddr.IP = s.addr.IP
-	laddr.Port = 0
-	var err error
-	s.listener, err = net.ListenTCP("tcp", &laddr) // start listen arbitorary port
-	if err != nil {
-		log.Fatal(err)
-	}
-	s.addr.Port = s.listener.Addr().(*net.TCPAddr).Port
+	http.HandleFunc("/videos/recorded", recordedVideoStreamHandler)
 }
 
 func (s *Server) Serve() error {
 	return http.Serve(s.listener, nil)
 }
 
-func NewServer(deviceUUID uuid.UUID) *Server {
+func NewServer(deviceUUID uuid.UUID, hostIP net.IP) *Server {
 	return &Server{
 		deviceUUID: deviceUUID,
+		hostIP:     hostIP,
 		listener:   nil,
 	}
 }
