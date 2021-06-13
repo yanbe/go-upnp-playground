@@ -114,7 +114,6 @@ func setupRulesContainer(parent *Container) *Container {
 		log.Fatal(err)
 	}
 	for _, ruleItem := range resRulesInfo.JSON200.Items {
-		ruleContainer := NewContainer(ObjectID(fmt.Sprintf("04%d", int(ruleItem.Id))), rulesContainer, ruleItem.Keyword)
 		queryRuleId := epgstation.QueryRuleId(ruleItem.Id)
 		res, err := epgstation.EPGStation.GetRecordedWithResponse(context.Background(), &epgstation.GetRecordedParams{
 			IsHalfWidth: false,
@@ -123,8 +122,11 @@ func setupRulesContainer(parent *Container) *Container {
 		if err != nil {
 			log.Fatal(err)
 		}
-		for _, recordedItem := range res.JSON200.Records {
-			NewItem(ruleContainer, &recordedItem, videoFileIdDurationMap)
+		if res.JSON200.Total > 0 {
+			ruleContainer := NewContainer(ObjectID(fmt.Sprintf("04%d", int(ruleItem.Id))), rulesContainer, ruleItem.Keyword)
+			for _, recordedItem := range res.JSON200.Records {
+				NewItem(ruleContainer, &recordedItem, videoFileIdDurationMap)
+			}
 		}
 	}
 	return rulesContainer
