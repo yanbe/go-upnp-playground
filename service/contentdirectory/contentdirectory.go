@@ -52,6 +52,16 @@ func Setup(ServiceURLBase string) {
 	log.Printf("Setup ContentDirectory complete. %d items found", recordedContainer.ChildCount)
 }
 
+func GetRecordedTotal() int {
+	res, err := epgstation.EPGStation.GetRecordedWithResponse(context.Background(), &epgstation.GetRecordedParams{
+		IsHalfWidth: false,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	return res.JSON200.Total
+}
+
 type Container struct {
 	XMLName xml.Name `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ container"`
 
@@ -142,6 +152,11 @@ func fmtProtocolInfo(videoFile *epgstation.VideoFile) (string, error) {
 	case ".mp4":
 		mime = "video/mp4"
 		pn = "AVC_MP4_BL_CIF15_AAC_520"
+		op = "01"
+		ci = "1"
+	case ".mkv":
+		mime = "video/x-matroska"
+		pn = "AVC_MKV_HP_HD_AAC_MULT5"
 		op = "01"
 		ci = "1"
 	default:

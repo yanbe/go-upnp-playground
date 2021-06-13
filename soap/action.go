@@ -1,7 +1,6 @@
 package soap
 
 import (
-	"go-upnp-playground/bufferpool"
 	"go-upnp-playground/service/contentdirectory"
 	"log"
 )
@@ -10,8 +9,6 @@ type Action struct {
 }
 
 func (a Action) Browse(ObjectID string, BrowseFlag string, Filter string, StartingIndex int, RequestedCount int, SortCriteria string) (string, int, int, int) {
-	buf := bufferpool.NewBytesBuffer()
-	defer bufferpool.PutBytesBuffer(buf)
 	switch BrowseFlag {
 	case "BrowseMetadata":
 		return contentdirectory.MarshalMetadata(ObjectID), 1, 1, a.GetSystemUpdateID()
@@ -27,7 +24,7 @@ func (a Action) Browse(ObjectID string, BrowseFlag string, Filter string, Starti
 
 func (a Action) GetSystemUpdateID() int {
 	// SystemUpdateID
-	return 1
+	return contentdirectory.GetRecordedTotal()
 }
 
 func (a Action) GetSearchCapabilities() string {
