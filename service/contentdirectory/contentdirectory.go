@@ -99,7 +99,7 @@ type Item struct {
 	Date      string `xml:"http://purl.org/dc/elements/1.1/ date"`
 	Resources *[]Res
 
-	AlbumArtURI string `xml:"urn:schemas-upnp-org:metadata-1-0/upnp/ albumArtURI"`
+	AlbumArtURI *string `xml:"urn:schemas-upnp-org:metadata-1-0/upnp/ albumArtURI"`
 }
 
 type Res struct {
@@ -215,8 +215,10 @@ func NewItem(Parent *Container, recordedItem *epgstation.RecordedItem, videoFile
 		Resources: &resources,
 
 		Date: time.Unix(int64(recordedItem.StartAt)/1000, 0).In(JST).Format("2006-01-02"),
-
-		AlbumArtURI: fmt.Sprintf("%s/thumbnails/%d", epgstation.ServerAPIRoot, (*recordedItem.Thumbnails)[0]),
+	}
+	if len(*recordedItem.Thumbnails) > 0 {
+		albumArtURI := fmt.Sprintf("%s/thumbnails/%d", epgstation.ServerAPIRoot, (*recordedItem.Thumbnails)[0])
+		item.AlbumArtURI = &albumArtURI
 	}
 	Parent.AppendItem(item)
 	return item
