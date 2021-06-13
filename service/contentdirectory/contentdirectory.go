@@ -17,8 +17,9 @@ type ObjectID string
 
 var registory = make(map[ObjectID]interface{})
 var serviceURLBase string
+var videoFileIdDurationMap map[epgstation.VideoFileId]time.Duration
 
-func setupRecorded(parent *Container) *Container {
+func setupRecordedContainer(parent *Container) *Container {
 	recordedContainer := NewContainer("01", parent, "録画済み")
 	res, err := epgstation.EPGStation.GetRecordedWithResponse(context.Background(), &epgstation.GetRecordedParams{
 		IsHalfWidth: false,
@@ -26,7 +27,7 @@ func setupRecorded(parent *Container) *Container {
 	if err != nil {
 		log.Fatal(err)
 	}
-	videoFileIdDurationMap := make(map[epgstation.VideoFileId]time.Duration)
+	videoFileIdDurationMap = make(map[epgstation.VideoFileId]time.Duration)
 	for _, recordedItem := range res.JSON200.Records {
 		for _, videoFile := range *recordedItem.VideoFiles {
 			res, err := epgstation.EPGStation.GetVideosVideoFileIdDurationWithResponse(context.Background(), epgstation.PathVideoFileId(videoFile.Id))
@@ -42,12 +43,72 @@ func setupRecorded(parent *Container) *Container {
 	return recordedContainer
 }
 
+func setupGenresContainer(parent *Container) *Container {
+	genresContainer := NewContainer("02", parent, "ジャンル別")
+	/*
+		res, err := epgstation.EPGStation.GetRecordedOptionsWithResponse(context.Background())
+		if err != nil {
+			log.Fatal(err)
+		}
+			for _, genre := range res.JSON200.Genres {
+				// FIXME: genre is not populated due to deserialise issue
+				genreContainer := NewContainer(ObjectID(fmt.Sprintf("02%d", int(*genre.ChannelId))), genresContainer, strconv.Itoa(int(*genre.ChannelId)))
+				res, err := epgstation.EPGStation.GetRecordedWithResponse(context.Background(), &epgstation.GetRecordedParams{
+					IsHalfWidth: false,
+					Genre:       (*epgstation.QueryProgramGenre)(genre.ChannelId),
+				})
+				if err != nil {
+					log.Fatal(err)
+				}
+				for _, recordedItem := range res.JSON200.Records {
+					NewItem(genreContainer, &recordedItem, videoFileIdDurationMap)
+				}
+			}
+	*/
+	return genresContainer
+}
+
+func setupChannelsContainer(parent *Container) *Container {
+	channelsContainer := NewContainer("03", parent, "チャンネル別")
+	resChannelInfo, err := epgstation.EPGStation.GetChannelsWithResponse(context.Background())
+	if err != nil {
+		log.Fatal(err)
+	}
+	channelIdChannelItemMap := make(map[epgstation.ChannelId]epgstation.ChannelItem)
+	for _, channelItem := range *resChannelInfo.JSON200 {
+		channelIdChannelItemMap[channelItem.Id] = channelItem
+	}
+
+	res, err := epgstation.EPGStation.GetRecordedOptionsWithResponse(context.Background())
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, channel := range res.JSON200.Channels {
+		channelName := channelIdChannelItemMap[channel.ChannelId].HalfWidthName
+		channelContainer := NewContainer(ObjectID(fmt.Sprintf("03%d", int(channel.ChannelId))), channelsContainer, channelName)
+		queryChannelId := epgstation.QueryChannelId(channel.ChannelId)
+		res, err := epgstation.EPGStation.GetRecordedWithResponse(context.Background(), &epgstation.GetRecordedParams{
+			IsHalfWidth: false,
+			ChannelId:   &queryChannelId,
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, recordedItem := range res.JSON200.Records {
+			NewItem(channelContainer, &recordedItem, videoFileIdDurationMap)
+		}
+	}
+	return channelsContainer
+}
+
 func Setup(ServiceURLBase string) {
 	log.Println("Setup ContentDirectory start")
 	serviceURLBase = ServiceURLBase
 
 	rootContainer := NewContainer("0", nil, "Root")
-	recordedContainer := setupRecorded(rootContainer)
+	recordedContainer := setupRecordedContainer(rootContainer)
+	setupGenresContainer(rootContainer)
+	setupChannelsContainer(rootContainer)
 
 	log.Printf("Setup ContentDirectory complete. %d items found", recordedContainer.ChildCount)
 }
