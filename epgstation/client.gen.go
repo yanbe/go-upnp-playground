@@ -577,12 +577,8 @@ type RecordedItem struct {
 
 // recorded が持つ検索オプション情報
 type RecordedSearchOptions struct {
-
-	// recorded が持つ channelId のリスト
-	Channels RecordedChannelListItem `json:"channels"`
-
-	// recorded が持つ genre のリスト
-	Genres RecordedGenreListItem `json:"genres"`
+	Channels []RecordedChannelListItem `json:"channels"`
+	Genres   []RecordedGenreListItem   `json:"genres"`
 }
 
 // タグ情報
