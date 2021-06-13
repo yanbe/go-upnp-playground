@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"text/template"
+	"time"
 
 	"go-upnp-playground/bufferpool"
 	"go-upnp-playground/epgstation"
@@ -57,6 +58,14 @@ func serviceContentDirectoryControlHandler(w http.ResponseWriter, r *http.Reques
 	w.Write(buf.Bytes())
 }
 
+func parseTimeSeekHeader(header string) (time.Duration, string) {
+	var h, m, s, ms int64
+	fmt.Sscanf(header, "npt=%d:%02d:%02d.%03d-", &h, &m, &s, &ms)
+	formatted := fmt.Sprintf("%d:%02d:%02d.%03d", h, m, s, ms)
+	duration := time.Duration(h)*time.Hour + time.Duration(m)*time.Minute + time.Duration(s)*time.Second + time.Duration(ms)*time.Millisecond
+	return duration, formatted
+}
+
 func recordedVideoStreamHandler(w http.ResponseWriter, r *http.Request) {
 	dump, _ := httputil.DumpRequest(r, false)
 	log.Println(string(dump))
@@ -68,6 +77,15 @@ func recordedVideoStreamHandler(w http.ResponseWriter, r *http.Request) {
 	for k, vs := range r.Header {
 		req.Header.Set(k, vs[0])
 	}
+	timeSeekReqHeader := r.Header.Get("Timeseekrange.dlna.org")
+	if timeSeekReqHeader != "" {
+		startDuration, startStr := parseTimeSeekHeader(timeSeekReqHeader)
+		resource := contentdirectory.GetObject(videoFileId).(*contentdirectory.Res)
+		elapsedRatio := float64(startDuration) / float64(resource.DurationNS)
+		startByte := int(elapsedRatio * float64(resource.Size))
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", startByte, resource.Size-1))
+		w.Header().Set("Timeseekrange.dlna.org", fmt.Sprintf("npt=%s-%s/%s", startStr, resource.Duration, resource.Duration))
+	}
 	client := new(http.Client)
 	res, err := client.Do(req)
 	dumpRes, _ := httputil.DumpResponse(res, false)
@@ -77,6 +95,9 @@ func recordedVideoStreamHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer res.Body.Close()
 	for k, vs := range res.Header {
+		if k == "Content-Type" && vs[0] == "video/mp2t" {
+			vs[0] = "video/mpeg"
+		}
 		w.Header().Set(k, vs[0])
 	}
 	w.WriteHeader(res.StatusCode)

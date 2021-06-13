@@ -24,16 +24,26 @@ func Setup(ServiceURLBase string) {
 
 	rootContainer := NewContainer("0", nil, "Root")
 	recordedContainer := NewContainer("01", rootContainer, "Recorded")
-
 	res, err := epgstation.EPGStation.GetRecordedWithResponse(context.Background(), &epgstation.GetRecordedParams{
 		IsHalfWidth: false,
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
+	videoFileIdDurationMap := make(map[epgstation.VideoFileId]time.Duration)
 	for _, recordedItem := range res.JSON200.Records {
-		NewItem(recordedContainer, &recordedItem)
+		for _, videoFile := range *recordedItem.VideoFiles {
+			res, err := epgstation.EPGStation.GetVideosVideoFileIdDurationWithResponse(context.Background(), epgstation.PathVideoFileId(videoFile.Id))
+			if err != nil {
+				log.Fatal(err)
+			}
+			videoFileIdDurationMap[videoFile.Id] = time.Duration(res.JSON200.Duration * float32(time.Second))
+		}
 	}
+	for _, recordedItem := range res.JSON200.Records {
+		NewItem(recordedContainer, &recordedItem, videoFileIdDurationMap)
+	}
+
 	log.Printf("Setup ContentDirectory complete. %d items found", recordedContainer.ChildCount)
 }
 
@@ -76,11 +86,12 @@ type Item struct {
 }
 
 type Res struct {
-	XMLName      xml.Name `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ res"`
-	ProtocolInfo string   `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ protocolInfo,attr"`
-	Size         int      `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ size,attr"`
-	Duration     string   `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ duuration,attr"`
-	URL          string   `xml:",chardata"`
+	XMLName      xml.Name      `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ res"`
+	ProtocolInfo string        `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ protocolInfo,attr"`
+	Size         int           `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ size,attr"`
+	Duration     string        `xml:"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/ duration,attr"`
+	DurationNS   time.Duration `xml:"-"`
+	URL          string        `xml:",chardata"`
 }
 
 // <DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/">
@@ -114,15 +125,24 @@ func NewContainer(Id ObjectID, Parent *Container, Title string) *Container {
 	return container
 }
 
-func mimeType(Filename string) string {
-	switch filepath.Ext(Filename) {
+func fmtProtocolInfo(videoFile *epgstation.VideoFile) (string, error) {
+	var mime, pn, op, ci string
+
+	switch filepath.Ext(*videoFile.Filename) {
 	case ".m2ts":
-		return "video/mp2t"
+		mime = "video/mpeg"
+		pn = "MPEG_PS_NTSC"
+		op = "10"
+		ci = "0"
 	case ".mp4":
-		return "video/mp4"
+		mime = "video/mp4"
+		pn = "AVC_MP4_BL_CIF15_AAC_520"
+		op = "01"
+		ci = "1"
 	default:
-		return "application/octet-stream"
+		return "", fmt.Errorf("unknown filetype %s", filepath.Ext(*videoFile.Filename))
 	}
+	return fmt.Sprintf("http-get:*:%s:DLNA_ORG.PN=%s;DLNA.ORG_OP=%s;DLNA.ORG_CI=%s;DLNA.ORG_FLAGS=01118000000000000000000000000000", mime, pn, op, ci), nil
 }
 
 func fmtDuration(d time.Duration) string {
@@ -131,23 +151,37 @@ func fmtDuration(d time.Duration) string {
 	m := d / time.Minute
 	d -= m * time.Minute
 	s := d / time.Second
-	d -= m * time.Second
+	d -= s * time.Second
+	ms := d / time.Millisecond
 
-	return fmt.Sprintf("%d:%02d:%02d", h, m, s)
+	return fmt.Sprintf("%d:%02d:%02d.%03d", h, m, s, ms)
 }
 
-func NewItem(Parent *Container, recordedItem *epgstation.RecordedItem) *Item {
+func NewResource(videoFile *epgstation.VideoFile, duration time.Duration) Res {
+	protocolInfo, err := fmtProtocolInfo(videoFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	res := Res{
+		ProtocolInfo: protocolInfo,
+		URL:          fmt.Sprintf("%svideos/recorded?videoFileId=%d", serviceURLBase, videoFile.Id),
+		Size:         videoFile.Size,
+		Duration:     fmtDuration(duration),
+		DurationNS:   duration,
+	}
+	objectId := strconv.Itoa(int(videoFile.Id))
+	registory[ObjectID(objectId)] = &res
+	return res
+}
+
+func NewItem(Parent *Container, recordedItem *epgstation.RecordedItem, videoFileIdDurationMap map[epgstation.VideoFileId]time.Duration) *Item {
 	if Parent == nil {
 		log.Fatal("container is required for item")
 	}
 
 	resources := make([]Res, len(*recordedItem.VideoFiles))
 	for i, videoFile := range *recordedItem.VideoFiles {
-		resources[i].ProtocolInfo = fmt.Sprintf("http-get:*:%s:DLNA.ORG_OP=01", mimeType(*videoFile.Filename))
-		resources[i].URL = fmt.Sprintf("%svideos/recorded?videoFileId=%d", serviceURLBase, videoFile.Id)
-		resources[i].Size = videoFile.Size
-		d := time.Duration(recordedItem.EndAt-recordedItem.StartAt) * time.Millisecond
-		resources[i].Duration = fmtDuration(d)
+		resources[i] = NewResource(&videoFile, videoFileIdDurationMap[videoFile.Id])
 	}
 	item := &Item{
 		Id:         ObjectID(strconv.Itoa(int(recordedItem.Id))),
