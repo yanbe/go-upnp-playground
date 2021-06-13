@@ -7,7 +7,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/http/httputil"
 	"os"
 	"strconv"
 	"text/template"
@@ -67,8 +66,6 @@ func parseTimeSeekHeader(header string) (time.Duration, string) {
 }
 
 func recordedVideoStreamHandler(w http.ResponseWriter, r *http.Request) {
-	dump, _ := httputil.DumpRequest(r, false)
-	log.Println(string(dump))
 	videoFileId := r.URL.Query().Get("videoFileId")
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/videos/%s", epgstation.ServerAPIRoot, videoFileId), nil)
 	if err != nil {
@@ -88,8 +85,6 @@ func recordedVideoStreamHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	client := new(http.Client)
 	res, err := client.Do(req)
-	dumpRes, _ := httputil.DumpResponse(res, false)
-	log.Println(string(dumpRes))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -101,7 +96,6 @@ func recordedVideoStreamHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(k, vs[0])
 	}
 	w.WriteHeader(res.StatusCode)
-
 	io.Copy(w, res.Body)
 }
 

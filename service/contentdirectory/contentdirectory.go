@@ -18,12 +18,8 @@ type ObjectID string
 var registory = make(map[ObjectID]interface{})
 var serviceURLBase string
 
-func Setup(ServiceURLBase string) {
-	log.Println("Setup ContentDirectory start")
-	serviceURLBase = ServiceURLBase
-
-	rootContainer := NewContainer("0", nil, "Root")
-	recordedContainer := NewContainer("01", rootContainer, "Recorded")
+func setupRecorded(parent *Container) *Container {
+	recordedContainer := NewContainer("01", parent, "録画済み")
 	res, err := epgstation.EPGStation.GetRecordedWithResponse(context.Background(), &epgstation.GetRecordedParams{
 		IsHalfWidth: false,
 	})
@@ -43,6 +39,15 @@ func Setup(ServiceURLBase string) {
 	for _, recordedItem := range res.JSON200.Records {
 		NewItem(recordedContainer, &recordedItem, videoFileIdDurationMap)
 	}
+	return recordedContainer
+}
+
+func Setup(ServiceURLBase string) {
+	log.Println("Setup ContentDirectory start")
+	serviceURLBase = ServiceURLBase
+
+	rootContainer := NewContainer("0", nil, "Root")
+	recordedContainer := setupRecorded(rootContainer)
 
 	log.Printf("Setup ContentDirectory complete. %d items found", recordedContainer.ChildCount)
 }
