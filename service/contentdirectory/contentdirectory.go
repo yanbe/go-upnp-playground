@@ -11,6 +11,19 @@ import (
 
 var serviceURLBase string
 var videoFileIdDurationMap map[epgstation.VideoFileId]time.Duration
+var lastRecordedTotal int
+
+func watchEPGStationForSetup() {
+	for {
+		time.Sleep(1 * time.Minute)
+		res, err := epgstation.EPGStation.GetRecordedWithResponse(context.Background(), &epgstation.GetRecordedParams{
+			IsHalfWidth: false,
+		})
+		if err == nil && res.JSON200.Total != lastRecordedTotal {
+			Setup(serviceURLBase)
+		}
+	}
+}
 
 func Setup(ServiceURLBase string) {
 	log.Println("Setup ContentDirectory start")
@@ -23,6 +36,8 @@ func Setup(ServiceURLBase string) {
 	setupRulesContainer(rootContainer)
 
 	log.Printf("Setup ContentDirectory complete. %d items found", recordedContainer.ChildCount)
+
+	go watchEPGStationForSetup()
 }
 
 func setupRecordedContainer(parent *Container) *Container {
@@ -33,6 +48,7 @@ func setupRecordedContainer(parent *Container) *Container {
 	if err != nil {
 		log.Fatal(err)
 	}
+	lastRecordedTotal = res.JSON200.Total
 	videoFileIdDurationMap = make(map[epgstation.VideoFileId]time.Duration)
 	for _, recordedItem := range res.JSON200.Records {
 		for _, videoFile := range *recordedItem.VideoFiles {

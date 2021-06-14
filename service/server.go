@@ -120,12 +120,10 @@ func (s *Server) Listen() {
 }
 
 func (s *Server) Setup() {
-	addr := net.TCPAddr{
+	epgstation.Setup(net.TCPAddr{
 		IP:   s.hostIP,
 		Port: 8888,
-	}
-	epgstation.Setup(addr)
-
+	})
 	contentdirectory.Setup(URLBase)
 
 	http.HandleFunc("/", serveXMLFileHandler("tmpl/device.xml", map[string]interface{}{
