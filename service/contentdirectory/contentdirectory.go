@@ -13,6 +13,25 @@ var serviceURLBase string
 var videoFileIdDurationMap map[epgstation.VideoFileId]time.Duration
 var lastRecordedTotal int
 
+var genreIdNameMap = map[epgstation.ProgramGenreLv1]string{
+	0x0: "ニュース・報道",
+	0x1: "スポーツ",
+	0x2: "情報・ワイドショー",
+	0x3: "ドラマ",
+	0x4: "音楽",
+	0x5: "バラエティ",
+	0x6: "映画",
+	0x7: "アニメ・特撮",
+	0x8: "ドキュメンタリー・教養",
+	0x9: "劇場・公演",
+	0xa: "趣味・教育",
+	0xb: "福祉",
+	0xc: "予備",
+	0xd: "予備",
+	0xe: "拡張",
+	0xf: "その他",
+}
+
 func watchEPGStationForSetup() {
 	for {
 		time.Sleep(1 * time.Minute)
@@ -67,26 +86,24 @@ func setupRecordedContainer(parent *Container) *Container {
 
 func setupGenresContainer(parent *Container) *Container {
 	genresContainer := NewContainer("02", parent, "ジャンル別")
-	/*
-		res, err := epgstation.EPGStation.GetRecordedOptionsWithResponse(context.Background())
+	res, err := epgstation.EPGStation.GetRecordedOptionsWithResponse(context.Background())
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, genre := range res.JSON200.Genres {
+		genreContainer := NewContainer(ObjectID(fmt.Sprintf("02%d", int(genre.Genre))), genresContainer, genreIdNameMap[genre.Genre])
+		genre := epgstation.QueryProgramGenre(genre.Genre)
+		res, err := epgstation.EPGStation.GetRecordedWithResponse(context.Background(), &epgstation.GetRecordedParams{
+			IsHalfWidth: true,
+			Genre:       &genre,
+		})
 		if err != nil {
 			log.Fatal(err)
 		}
-			for _, genre := range res.JSON200.Genres {
-				// FIXME: genre is not populated due to deserialise issue
-				genreContainer := NewContainer(ObjectID(fmt.Sprintf("02%d", int(*genre.ChannelId))), genresContainer, strconv.Itoa(int(*genre.ChannelId)))
-				res, err := epgstation.EPGStation.GetRecordedWithResponse(context.Background(), &epgstation.GetRecordedParams{
-					IsHalfWidth: false,
-					Genre:       (*epgstation.QueryProgramGenre)(genre.ChannelId),
-				})
-				if err != nil {
-					log.Fatal(err)
-				}
-				for _, recordedItem := range res.JSON200.Records {
-					NewItem(genreContainer, &recordedItem, videoFileIdDurationMap)
-				}
-			}
-	*/
+		for _, recordedItem := range res.JSON200.Records {
+			NewItem(genreContainer, &recordedItem, videoFileIdDurationMap)
+		}
+	}
 	return genresContainer
 }
 

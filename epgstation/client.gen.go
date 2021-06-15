@@ -489,11 +489,11 @@ type RecordedChannelListItem struct {
 // recorded が持つ genre のリスト
 type RecordedGenreListItem struct {
 
-	// ジャンル
-	ChannelId *ProgramGenreLv1 `json:"channelId,omitempty"`
-
 	// 録画数
 	Cnt int `json:"cnt"`
+
+	// ジャンル
+	Genre ProgramGenreLv1 `json:"genre"`
 }
 
 // 録画済み番組 id
